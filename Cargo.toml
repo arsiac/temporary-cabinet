@@ -1,0 +1,37 @@
+[package]
+name = "temporary-cabinet"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+web.workspace = true
+api.workspace = true
+log.workspace = true
+simple_logger.workspace = true
+axum.workspace = true
+tokio.workspace = true
+clap.workspace = true
+tower-http.workspace = true
+axum-embed = "0.1.0"
+
+
+[workspace]
+members = [".", "api", "web"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+# Self
+web.path = "web"
+api.path = "api"
+# Dependencies
+clap = { version = "4.5.50", features = ["derive"] }
+log = "0.4"
+simple_logger = "5"
+rust-embed = "8"
+axum = "0.8"
+tower-http = { version = "0.6", features = ["fs"]}
+tokio = { version = "1.48.0", features = ["full"] }
+mime_guess = "2.0.5"

@@ -1,0 +1,7 @@
+[package]
+name = "web"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rust-embed.workspace = true
