@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -9,6 +10,10 @@ pub struct Cabinet {
     pub password: Option<String>,
     pub used: bool,
     pub pending_destruction: bool,
+
+    pub create_at: Option<DateTime<Local>>,
+    pub update_at: Option<DateTime<Local>>,
+    pub version: Option<i32>,
 }
 
 impl Cabinet {
@@ -20,6 +25,9 @@ impl Cabinet {
             password: None,
             used: false,
             pending_destruction: false,
+            create_at: None,
+            update_at: None,
+            version: None,
         }
     }
 }

@@ -30,18 +30,23 @@ where
     CIR: CabinetItemRepository,
 {
     /// Create a specified number of cabinets
-    pub async fn initialize(&self, cabinet_number: u64) -> Result<(), DomainError> {
+    pub async fn initialize(&self, cabinet_number: i64) -> Result<(), DomainError> {
         log::info!("Initializing cabinets({})...", cabinet_number);
-        let current_number = self.cabinet_repository.count().await?;
+        let current_number = self.cabinet_repository.max_code().await?.unwrap_or(0);
         if current_number == cabinet_number {
             log::info!("Cabinets already initialized'");
             return Ok(());
         }
 
         if current_number < cabinet_number {
-            for i in current_number + 1..=cabinet_number {
-                let cabinet = Cabinet::new(i as i64, None, None);
-                self.cabinet_repository.save(cabinet).await?;
+            for code in current_number + 1..=cabinet_number {
+                if let Some(mut cabinet) = self.cabinet_repository.find_by_code(code).await? {
+                    cabinet.pending_destruction = false;
+                    self.cabinet_repository.update_by_code(cabinet).await?;
+                } else {
+                    let cabinet = Cabinet::new(code, None, None);
+                    self.cabinet_repository.save(cabinet).await?;
+                }
             }
             log::info!(
                 "Cabinets [{}, {}] initialized",
@@ -52,11 +57,12 @@ where
         }
 
         if current_number > cabinet_number {
-            let codes: Vec<i64> = (cabinet_number + 1..=current_number)
-                .map(|e| e as i64)
-                .collect();
+            let codes: Vec<i64> = (cabinet_number + 1..=current_number).collect();
             self.cabinet_repository
                 .update_pending_destruction_by_codes(codes, true)
+                .await?;
+            self.cabinet_repository
+                .delete_unused_pending_destruction()
                 .await?;
             log::info!(
                 "Cabinets [{}, {}] marked as pending destruction",

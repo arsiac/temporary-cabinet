@@ -33,5 +33,5 @@ pub(crate) struct Args {
 
     /// Cabinet number
     #[arg(long, default_value_t = 100)]
-    pub(crate) cabinet_number: u64,
+    pub(crate) cabinet_number: i64,
 }

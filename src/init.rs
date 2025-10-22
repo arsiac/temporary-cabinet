@@ -83,10 +83,22 @@ pub(crate) async fn initialize_database(
 }
 
 /// Initialize cabinets
-pub(crate) async fn initialize_cabinets(state: &api::ServerState, cabinet_number: u64) {
+pub(crate) async fn initialize_cabinets(state: &api::ServerState, cabinet_number: i64) {
     use infrastructure::service::cabinet::create_cabinet_service;
-    let cabinet_service = create_cabinet_service(&state.connection, &state.data_folder);
-    if cabinet_service.initialize(cabinet_number).await.is_err() {
+
+    if cabinet_number <= 0 {
+        eprint!("Cabinet number({}) must great than 0.", cabinet_number);
         std::process::exit(1);
     }
+
+    let cabinet_service = create_cabinet_service(&state.connection, &state.data_folder);
+
+    let transaction = infrastructure::database::begin_transaction(&state.connection)
+        .await
+        .unwrap();
+    if cabinet_service.initialize(cabinet_number).await.is_err() {
+        transaction.rollback().await.unwrap();
+        std::process::exit(1);
+    }
+    transaction.commit().await.unwrap();
 }

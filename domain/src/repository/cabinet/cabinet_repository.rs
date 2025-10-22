@@ -9,6 +9,9 @@ pub trait CabinetRepository {
     /// Delete a cabinet by code
     async fn delete_by_code(&self, code: i64) -> Result<(), DomainError>;
 
+    /// Delete unused pending destruction cabinets
+    async fn delete_unused_pending_destruction(&self) -> Result<(), DomainError>;
+
     /// Update a cabinet by code
     async fn update_by_code(&self, cabinet: Cabinet) -> Result<(), DomainError>;
 
@@ -21,6 +24,9 @@ pub trait CabinetRepository {
 
     /// Get the number of cabinets
     async fn count(&self) -> Result<u64, DomainError>;
+
+    /// Get the max code of the cabinets
+    async fn max_code(&self) -> Result<Option<i64>, DomainError>;
 
     /// Find cabinet by code
     async fn find_by_code(&self, code: i64) -> Result<Option<Cabinet>, DomainError>;
