@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 web.workspace = true
 api.workspace = true
+migration.workspace = true
 log.workspace = true
 simple_logger.workspace = true
 axum.workspace = true
@@ -14,10 +15,11 @@ clap.workspace = true
 tower-http.workspace = true
 axum-embed.workspace = true
 tower.workspace = true
+sea-orm.workspace = true
 
 
 [workspace]
-members = [".", "api", "web"]
+members = [".", "api", "web", "migration"]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,6 +29,7 @@ edition = "2024"
 # Self
 web.path = "web"
 api.path = "api"
+migration.path = "migration"
 # Dependencies
 clap = { version = "4.5.50", features = ["derive"] }
 log = "0.4"
@@ -34,6 +37,19 @@ simple_logger = "5"
 rust-embed = "8"
 axum = "0.8"
 axum-embed = "0.1.0"
+sea-orm = { version = "1.1.17", features = [
+    "macros",
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+    "with-chrono",
+] }
+sea-orm-migration = { version = "1.1.17", features = [
+    "sqlx-sqlite",
+    "runtime-tokio-rustls",
+] }
 tower = "0.5.2"
-tower-http = { version = "0.6", features = ["compression-full", "decompression-full"] }
+tower-http = { version = "0.6", features = [
+    "compression-full",
+    "decompression-full",
+] }
 tokio = { version = "1.48.0", features = ["full"] }

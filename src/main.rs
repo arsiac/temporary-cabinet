@@ -12,7 +12,7 @@ static INDEX_FILE: &str = "index.html";
 async fn main() {
     let args = arg::parse();
     init::initialize_logger(args.debug);
-
+    let connection = init::initialize_database(args.data_dir).await;
     let serv_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&serv_addr).await;
     if let Err(e) = listener {
@@ -20,14 +20,16 @@ async fn main() {
         return;
     }
     log::info!("Serving on {}", &serv_addr);
-    axum::serve(listener.unwrap(), router()).await.unwrap();
+    axum::serve(listener.unwrap(), router(connection))
+        .await
+        .unwrap();
 }
 
 /// Merge front-end and back-end routes and configure middleware
-fn router() -> axum::Router {
+fn router(connection: sea_orm::DatabaseConnection) -> axum::Router {
     use tower_http::{compression::CompressionLayer, decompression::RequestDecompressionLayer};
 
-    let state = api::ServerState;
+    let state = api::ServerState::new(connection);
     let static_service = axum_embed::ServeEmbed::<web::WebAssets>::with_parameters(
         Some(INDEX_FILE.to_string()),
         axum_embed::FallbackBehavior::Redirect,

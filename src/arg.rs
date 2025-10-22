@@ -1,6 +1,5 @@
-
 /// Parse command line arguments
-pub(crate) fn parse() -> Args{
+pub(crate) fn parse() -> Args {
     use clap::Parser;
     Args::parse()
 }
@@ -22,7 +21,13 @@ pub(crate) struct Args {
     #[arg(short, long, default_value_t = 8765)]
     pub(crate) port: u16,
 
+    /// Path to the directory where program's data are stored
+    ///
+    /// Defaults to the program's directory.
+    #[arg(long)]
+    pub(crate) data_dir: Option<String>,
+
     /// Enable verbose debug logging
-    #[arg(short, long)]
+    #[arg(long)]
     pub(crate) debug: bool,
 }
