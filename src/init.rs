@@ -17,17 +17,11 @@ pub(crate) fn initialize_logger(debug: bool) {
     }
 }
 
-/// Connect to database and migrate
-pub(crate) async fn initialize_database(data_dir: Option<String>) -> sea_orm::DatabaseConnection {
-    use migration::Migrator;
-    use sea_orm::{ConnectOptions, Database};
-
-    let database_file = match data_dir {
-        Some(path) => {
-            let path = std::path::Path::new(&path);
-            let path = path.join("db.sqlite");
-            path.to_str().unwrap().to_string()
-        }
+/// Initialize data folder
+pub(crate) fn initialize_data_folder(data_folder: Option<String>) -> std::path::PathBuf {
+    use std::path::PathBuf;
+    let path = match data_folder {
+        Some(path) => PathBuf::from(&path),
         None => {
             let exe_path = std::env::current_exe();
             if let Err(e) = exe_path {
@@ -41,18 +35,37 @@ pub(crate) async fn initialize_database(data_dir: Option<String>) -> sea_orm::Da
                 std::process::exit(1);
             }
             let exe_path = exe_path.unwrap();
-            exe_path.join("db.sqlite").to_str().unwrap().to_string()
+            exe_path.to_path_buf()
         }
     };
 
-    let database_url = format!("sqlite://{}?mode=rwc", &database_file);
+    if !path.exists()
+        && let Err(e) = std::fs::create_dir_all(&path)
+    {
+        eprintln!("Failed to create data directory: {}", e);
+        std::process::exit(1);
+    }
+
+    log::debug!("Using data directory '{}'", path.display());
+    path
+}
+
+/// Connect to database and migrate
+pub(crate) async fn initialize_database(
+    data_folder: &std::path::Path,
+) -> sea_orm::DatabaseConnection {
+    use migration::Migrator;
+    use sea_orm::{ConnectOptions, Database};
+
+    let database_file = data_folder.join("db.sqlite");
+    let database_url = format!("sqlite://{}?mode=rwc", database_file.display());
     let mut connect_opts = ConnectOptions::new(database_url);
     connect_opts
         .max_connections(10)
         .min_connections(2)
         .connect_timeout(std::time::Duration::from_secs(10))
         .idle_timeout(std::time::Duration::from_secs(10));
-    log::debug!("Connecting to database '{}'...", &database_file);
+    log::debug!("Connecting to database '{}'...", database_file.display());
     let connection = Database::connect(connect_opts).await;
     if let Err(e) = connection {
         eprintln!("Failed to connect to database: {}", e);
@@ -67,4 +80,13 @@ pub(crate) async fn initialize_database(data_dir: Option<String>) -> sea_orm::Da
         std::process::exit(1);
     }
     connection
+}
+
+/// Initialize cabinets
+pub(crate) async fn initialize_cabinets(state: &api::ServerState, cabinet_number: u64) {
+    use infrastructure::service::cabinet::create_cabinet_service;
+    let cabinet_service = create_cabinet_service(&state.connection, &state.data_folder);
+    if cabinet_service.initialize(cabinet_number).await.is_err() {
+        std::process::exit(1);
+    }
 }

@@ -12,7 +12,10 @@ static INDEX_FILE: &str = "index.html";
 async fn main() {
     let args = arg::parse();
     init::initialize_logger(args.debug);
-    let connection = init::initialize_database(args.data_dir).await;
+    let data_folder = init::initialize_data_folder(args.data_dir);
+    let connection = init::initialize_database(&data_folder).await;
+    let state = api::ServerState::new(connection, data_folder);
+    init::initialize_cabinets(&state, args.cabinet_number).await;
     let serv_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&serv_addr).await;
     if let Err(e) = listener {
@@ -20,16 +23,13 @@ async fn main() {
         return;
     }
     log::info!("Serving on {}", &serv_addr);
-    axum::serve(listener.unwrap(), router(connection))
-        .await
-        .unwrap();
+    axum::serve(listener.unwrap(), router(state)).await.unwrap();
 }
 
 /// Merge front-end and back-end routes and configure middleware
-fn router(connection: sea_orm::DatabaseConnection) -> axum::Router {
+fn router(state: api::ServerState) -> axum::Router {
     use tower_http::{compression::CompressionLayer, decompression::RequestDecompressionLayer};
 
-    let state = api::ServerState::new(connection);
     let static_service = axum_embed::ServeEmbed::<web::WebAssets>::with_parameters(
         Some(INDEX_FILE.to_string()),
         axum_embed::FallbackBehavior::Redirect,

@@ -1,11 +1,12 @@
 [package]
-name = "api"
+name = "domain"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-domain.workspace = true
-infrastructure.workspace = true
+async-trait.workspace = true
 axum.workspace = true
+log.workspace = true
 rand.workspace = true
-sea-orm.workspace = true
+serde.workspace = true
+serde_json.workspace = true

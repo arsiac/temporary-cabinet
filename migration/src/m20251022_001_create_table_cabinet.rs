@@ -12,10 +12,11 @@ impl MigrationTrait for Migration {
                     .table(Cabinet::Table)
                     .if_not_exists()
                     .col(big_integer(Cabinet::Code).primary_key())
-                    .col(string(Cabinet::Name).string_len(40))
+                    .col(string_len_null(Cabinet::Name, 40))
                     .col(string_len_null(Cabinet::Description, 400))
                     .col(string_len_null(Cabinet::Password, 100))
                     .col(boolean(Cabinet::Used))
+                    .col(boolean(Cabinet::PendingDestruction))
                     .col(date_time(Cabinet::CreateAt))
                     .col(date_time(Cabinet::UpdateAt))
                     .col(integer(Cabinet::Version))
@@ -39,6 +40,7 @@ enum Cabinet {
     Description,
     Password,
     Used,
+    PendingDestruction,
     CreateAt,
     UpdateAt,
     Version,

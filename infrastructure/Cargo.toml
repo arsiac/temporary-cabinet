@@ -1,11 +1,11 @@
 [package]
-name = "api"
+name = "infrastructure"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 domain.workspace = true
-infrastructure.workspace = true
-axum.workspace = true
-rand.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+log.workspace = true
 sea-orm.workspace = true
