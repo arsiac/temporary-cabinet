@@ -110,6 +110,29 @@ impl Repository for CabinetRepository {
         })
     }
 
+    async fn count_used(&self) -> Result<u64, DomainError> {
+        Entity::find()
+            .filter(Column::Used.eq(true))
+            .count(&self.connection)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to count used cabinet: {}", e);
+                DomainError::InternalError
+            })
+    }
+
+    async fn exists_by_code(&self, code: i64) -> Result<bool, DomainError> {
+        let count = Entity::find()
+            .filter(Column::Code.eq(code))
+            .count(&self.connection)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to check existence of cabinet: {}", e);
+                DomainError::InternalError
+            })?;
+        Ok(count > 0)
+    }
+
     async fn max_code(&self) -> Result<Option<i64>, DomainError> {
         use sea_orm::{QueryOrder, QuerySelect};
         Entity::find()

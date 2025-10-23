@@ -1,4 +1,4 @@
-use crate::entity::cabinet::{Cabinet, CabinetItem, CabinetItemCategory};
+use crate::entity::cabinet::{Cabinet, CabinetItem, CabinetStatus};
 use crate::error::DomainError;
 use crate::repository::cabinet::{CabinetItemRepository, CabinetRepository};
 
@@ -79,5 +79,26 @@ where
     /// Get all the unused cabinets
     pub async fn list_unused_cabinets(&self) -> Result<Vec<Cabinet>, DomainError> {
         self.cabinet_repository.list_unused().await
+    }
+
+    /// Get the status of the cabinets
+    pub async fn status(&self) -> Result<CabinetStatus, DomainError> {
+        let total = self.cabinet_repository.count().await?;
+        let used = self.cabinet_repository.count_used().await?;
+        Ok(CabinetStatus::new(total, used))
+    }
+
+    /// Get all the items in a cabinet
+    pub async fn list_items_by_cabinet_code(
+        &self,
+        code: i64,
+    ) -> Result<Vec<CabinetItem>, DomainError> {
+        let exists = self.cabinet_repository.exists_by_code(code).await?;
+        if !exists {
+            return Err(DomainError::CabinetNotFound);
+        }
+        self.cabinet_item_repository
+            .list_by_cabinet_code(code)
+            .await
     }
 }

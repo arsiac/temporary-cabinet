@@ -90,3 +90,15 @@ impl CabinetItem {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct CabinetStatus {
+    pub total: u64,
+    pub used: u64,
+}
+
+impl CabinetStatus {
+    pub fn new(total: u64, used: u64) -> Self {
+        CabinetStatus { total, used }
+    }
+}

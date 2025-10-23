@@ -25,6 +25,12 @@ pub trait CabinetRepository {
     /// Get the number of cabinets
     async fn count(&self) -> Result<u64, DomainError>;
 
+    /// Get the number of used cabinets
+    async fn count_used(&self) -> Result<u64, DomainError>;
+
+    /// Check whether a cabinet with the given code exists.
+    async fn exists_by_code(&self, code: i64) -> Result<bool, DomainError>;
+
     /// Get the max code of the cabinets
     async fn max_code(&self) -> Result<Option<i64>, DomainError>;
 

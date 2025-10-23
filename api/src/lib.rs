@@ -4,7 +4,7 @@ mod cabinet;
 pub fn router() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/ping", axum::routing::get(ping))
-        .nest("/cabinets", cabinet::router())
+        .nest("/cabinet", cabinet::router())
 }
 
 /// ping the server
