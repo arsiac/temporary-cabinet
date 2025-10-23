@@ -23,9 +23,15 @@ impl CabinetItemRepository {
 
 impl CabinetItemRepository {
     fn resolve_file_path(&self, cabinet_code: i64, cabinet_item_id: i64) -> PathBuf {
-        self.store_folder
-            .join(cabinet_code.to_string())
-            .join(cabinet_item_id.to_string())
+        let folder_path = self.store_folder.join(cabinet_code.to_string());
+
+        if !folder_path.exists()
+            && let Err(e) = std::fs::create_dir_all(&folder_path)
+        {
+            log::error!("Failed to create folder '{:?}': {}", folder_path, e);
+            return PathBuf::new();
+        }
+        folder_path.join(cabinet_item_id.to_string())
     }
 
     /// Write content to filesystem
@@ -46,23 +52,38 @@ impl CabinetItemRepository {
         }
         Ok(content.unwrap())
     }
+
+    fn remove_file(&self, path: &Path) -> Result<(), DomainError> {
+        if let Err(e) = std::fs::remove_file(path) {
+            log::error!("Failed to remove file '{:?}': {}", path, e);
+            return Err(DomainError::InternalError);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl Repository for CabinetItemRepository {
-    async fn save(&self, cabinet_item: CabinetItem) -> Result<(), DomainError> {
-        let content = if let Some(content) = cabinet_item.content.as_ref() {
+    async fn save(&self, item: CabinetItem) -> Result<(), DomainError> {
+        let content = if let Some(content) = item.content.as_ref() {
             content
         } else {
             return Err(DomainError::CabinetItemContentMustNotEmpty);
         };
 
         // Write content to filesystem
-        let path = self.resolve_file_path(cabinet_item.cabinet_code, cabinet_item.id);
+        let path = self.resolve_file_path(item.cabinet_code, item.id);
+
+        log::debug!(
+            "Writing cabinet '{}' item '{}' content to '{:?}'",
+            item.cabinet_code,
+            item.sort_order,
+            path
+        );
         self.write_content(&path, content)?;
 
         // Save cabinet item to database
-        let mut model = Model::try_from(cabinet_item)?;
+        let mut model = Model::try_from(item)?;
         model.path = Some(path.to_string_lossy().to_string());
         let active_model = ActiveModel::from(model);
         active_model.insert(&self.connection).await.map_err(|e| {
@@ -73,6 +94,22 @@ impl Repository for CabinetItemRepository {
     }
 
     async fn delete_by_id(&self, id: i64) -> Result<(), DomainError> {
+        let item = self.find_model_by_id(id).await?;
+        if item.is_none() {
+            return Err(DomainError::CabinetItemNotFound);
+        }
+        let item = item.unwrap();
+        let item_category = CabinetItemCategory::from_str(&item.category)?;
+        if item_category == CabinetItemCategory::File {
+            let path = PathBuf::from(item.path.as_ref().unwrap());
+            log::debug!(
+                "Removing cabinet '{}' item '{}' content from '{:?}'",
+                item.cabinet_code,
+                item.sort_order,
+                path
+            );
+            self.remove_file(&path)?;
+        }
         Entity::delete_by_id(id)
             .exec(&self.connection)
             .await
@@ -88,14 +125,7 @@ impl Repository for CabinetItemRepository {
         id: i64,
         with_content: bool,
     ) -> Result<Option<CabinetItem>, DomainError> {
-        let model = Entity::find_by_id(id)
-            .one(&self.connection)
-            .await
-            .map_err(|e| {
-                log::error!("Failed to find cabinet item '{}': {}", id, e);
-                DomainError::InternalError
-            })?;
-
+        let model = self.find_model_by_id(id).await?;
         if model.is_none() {
             return Ok(None);
         }
@@ -129,6 +159,18 @@ impl Repository for CabinetItemRepository {
             cabinet_items.push(cabinet_item);
         }
         Ok(cabinet_items)
+    }
+}
+
+impl CabinetItemRepository {
+    async fn find_model_by_id(&self, id: i64) -> Result<Option<Model>, DomainError> {
+        Entity::find_by_id(id)
+            .one(&self.connection)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to find cabinet item '{}': {}", id, e);
+                DomainError::InternalError
+            })
     }
 }
 

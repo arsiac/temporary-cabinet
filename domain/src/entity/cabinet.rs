@@ -2,29 +2,77 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum CabinetStatus {
+    Vacant,
+    Hold,
+    Occupied,
+}
+
+impl std::fmt::Display for CabinetStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CabinetStatus::Vacant => write!(f, "vacant"),
+            CabinetStatus::Hold => write!(f, "hold"),
+            CabinetStatus::Occupied => write!(f, "occupied"),
+        }
+    }
+}
+
+impl TryFrom<i32> for CabinetStatus {
+    type Error = crate::error::DomainError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(CabinetStatus::Vacant),
+            2 => Ok(CabinetStatus::Hold),
+            3 => Ok(CabinetStatus::Occupied),
+            _ => Err(crate::error::DomainError::CabinetStatusNotSupport(value)),
+        }
+    }
+}
+
+impl CabinetStatus {
+    pub fn code(&self) -> i32 {
+        match self {
+            CabinetStatus::Vacant => 1,
+            CabinetStatus::Hold => 2,
+            CabinetStatus::Occupied => 3,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Cabinet {
     pub code: i64,
     pub name: Option<String>,
     pub description: Option<String>,
     pub password: Option<String>,
-    pub used: bool,
-    pub pending_destruction: bool,
-
+    pub status: CabinetStatus,
+    pub hold_token: Option<String>,
+    pub expire_at: Option<DateTime<Local>>,
     pub create_at: Option<DateTime<Local>>,
     pub update_at: Option<DateTime<Local>>,
     pub version: Option<i32>,
 }
 
 impl Cabinet {
-    pub fn new(code: i64, name: Option<String>, description: Option<String>) -> Self {
+    pub fn new(
+        code: i64,
+        name: Option<String>,
+        description: Option<String>,
+        status: CabinetStatus,
+        hold_token: Option<String>,
+        expire_at: Option<DateTime<Local>>,
+    ) -> Self {
         Cabinet {
             code,
             name,
             description,
             password: None,
-            used: false,
-            pending_destruction: false,
+            status,
+            hold_token,
+            expire_at,
             create_at: None,
             update_at: None,
             version: None,
@@ -92,13 +140,18 @@ impl CabinetItem {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct CabinetStatus {
+pub struct CabinetUsage {
     pub total: u64,
     pub used: u64,
+    pub free: u64,
 }
 
-impl CabinetStatus {
+impl CabinetUsage {
     pub fn new(total: u64, used: u64) -> Self {
-        CabinetStatus { total, used }
+        CabinetUsage {
+            total,
+            used,
+            free: total - used,
+        }
     }
 }

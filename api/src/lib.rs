@@ -18,13 +18,19 @@ pub(crate) async fn ping() -> String {
 pub struct ServerState {
     pub connection: sea_orm::DatabaseConnection,
     pub data_folder: std::path::PathBuf,
+    pub cabinet_number: u64,
 }
 
 impl ServerState {
-    pub fn new(connection: sea_orm::DatabaseConnection, data_folder: std::path::PathBuf) -> Self {
+    pub fn new(
+        connection: sea_orm::DatabaseConnection,
+        data_folder: std::path::PathBuf,
+        cabinet_number: u64,
+    ) -> Self {
         Self {
             connection,
             data_folder,
+            cabinet_number,
         }
     }
 }

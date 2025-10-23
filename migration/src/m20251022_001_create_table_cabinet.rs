@@ -15,8 +15,9 @@ impl MigrationTrait for Migration {
                     .col(string_len_null(Cabinet::Name, 40))
                     .col(string_len_null(Cabinet::Description, 400))
                     .col(string_len_null(Cabinet::Password, 100))
-                    .col(boolean(Cabinet::Used))
-                    .col(boolean(Cabinet::PendingDestruction))
+                    .col(integer(Cabinet::Status))
+                    .col(string_len_null(Cabinet::HoldToken, 40))
+                    .col(date_time_null(Cabinet::ExpireAt))
                     .col(date_time(Cabinet::CreateAt))
                     .col(date_time(Cabinet::UpdateAt))
                     .col(integer(Cabinet::Version))
@@ -39,8 +40,9 @@ enum Cabinet {
     Name,
     Description,
     Password,
-    Used,
-    PendingDestruction,
+    Status,
+    HoldToken,
+    ExpireAt,
     CreateAt,
     UpdateAt,
     Version,

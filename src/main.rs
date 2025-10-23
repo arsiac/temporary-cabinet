@@ -14,8 +14,7 @@ async fn main() {
     init::initialize_logger(args.debug);
     let data_folder = init::initialize_data_folder(args.data_dir);
     let connection = init::initialize_database(&data_folder).await;
-    let state = api::ServerState::new(connection, data_folder);
-    init::initialize_cabinets(&state, args.cabinet_number).await;
+    let state = api::ServerState::new(connection, data_folder, args.cabinet_number);
     let serv_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&serv_addr).await;
     if let Err(e) = listener {

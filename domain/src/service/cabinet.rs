@@ -1,4 +1,6 @@
-use crate::entity::cabinet::{Cabinet, CabinetItem, CabinetStatus};
+use chrono::Local;
+
+use crate::entity::cabinet::{Cabinet, CabinetItem, CabinetStatus, CabinetUsage};
 use crate::error::DomainError;
 use crate::repository::cabinet::{CabinetItemRepository, CabinetRepository};
 
@@ -9,6 +11,7 @@ where
 {
     cabinet_repository: CR,
     cabinet_item_repository: CIR,
+    cabinets_number: u64,
 }
 
 impl<CR, CIR> CabinetService<CR, CIR>
@@ -16,10 +19,11 @@ where
     CR: CabinetRepository,
     CIR: CabinetItemRepository,
 {
-    pub fn new(cabinet_repository: CR, cabinet_item_repository: CIR) -> Self {
+    pub fn new(cabinet_repository: CR, cabinet_item_repository: CIR, cabinets_number: u64) -> Self {
         Self {
             cabinet_repository,
             cabinet_item_repository,
+            cabinets_number,
         }
     }
 }
@@ -29,63 +33,110 @@ where
     CR: CabinetRepository,
     CIR: CabinetItemRepository,
 {
-    /// Create a specified number of cabinets
-    pub async fn initialize(&self, cabinet_number: i64) -> Result<(), DomainError> {
-        log::info!("Initializing cabinets({})...", cabinet_number);
-        let current_number = self.cabinet_repository.max_code().await?.unwrap_or(0);
-        if current_number == cabinet_number {
-            log::info!("Cabinets already initialized'");
-            return Ok(());
+    pub async fn apply(&self) -> Result<Cabinet, DomainError> {
+        let now = Local::now();
+        let deleted_count = self.cabinet_repository.delete_expired(now).await?;
+        log::info!("Deleted {} expired cabinets", deleted_count);
+        let used = self
+            .cabinet_repository
+            .count_by_status(CabinetStatus::Occupied)
+            .await?;
+        if used >= self.cabinets_number {
+            return Err(DomainError::NoAvailableCabinet);
         }
 
-        if current_number < cabinet_number {
-            for code in current_number + 1..=cabinet_number {
-                if let Some(mut cabinet) = self.cabinet_repository.find_by_code(code).await? {
-                    cabinet.pending_destruction = false;
-                    self.cabinet_repository.update_by_code(cabinet).await?;
-                } else {
-                    let cabinet = Cabinet::new(code, None, None);
-                    self.cabinet_repository.save(cabinet).await?;
-                }
+        loop {
+            let code = rand::random_range(100000..999999);
+            let exists = self.cabinet_repository.exists_by_code(code).await?;
+            log::debug!("Trying to apply for a cabinet with code '{}'", code);
+            if !exists {
+                let hold_token = uuid::Uuid::new_v4().simple().to_string();
+                let expire_at = Local::now() + chrono::Duration::minutes(10);
+                let cabinet = Cabinet::new(
+                    code,
+                    None,
+                    None,
+                    CabinetStatus::Hold,
+                    Some(hold_token),
+                    Some(expire_at),
+                );
+                let cabinet = self.cabinet_repository.save(cabinet.clone()).await?;
+                log::info!("Applied for a cabinet with code '{}'", code);
+                return Ok(cabinet);
+            } else {
+                log::debug!("Cabinet with code '{}' already exists", code);
             }
-            log::info!(
-                "Cabinets [{}, {}] initialized",
-                current_number + 1,
-                cabinet_number
-            );
-            return Ok(());
         }
-
-        if current_number > cabinet_number {
-            let codes: Vec<i64> = (cabinet_number + 1..=current_number).collect();
-            self.cabinet_repository
-                .update_pending_destruction_by_codes(codes, true)
-                .await?;
-            self.cabinet_repository
-                .delete_unused_pending_destruction()
-                .await?;
-            log::info!(
-                "Cabinets [{}, {}] marked as pending destruction",
-                cabinet_number + 1,
-                current_number
-            );
-            return Ok(());
-        }
-
-        // Should never happen
-        Err(DomainError::InternalError)
     }
 
-    /// Get all the unused cabinets
-    pub async fn list_unused_cabinets(&self) -> Result<Vec<Cabinet>, DomainError> {
-        self.cabinet_repository.list_unused().await
+    /// Save items
+    pub async fn save(&self, cabinet: Cabinet, items: Vec<CabinetItem>) -> Result<(), DomainError> {
+        // Check params
+        if cabinet.password.is_none() {
+            return Err(DomainError::CabinetPasswordRequired);
+        }
+        if cabinet.expire_at.is_none() {
+            return Err(DomainError::CabinetExpireTimeRequired);
+        }
+        if cabinet.hold_token.is_none() {
+            return Err(DomainError::CabinetHoldTokenRequired);
+        }
+        let exists_cabinet = self.cabinet_repository.find_by_code(cabinet.code).await?;
+        if exists_cabinet.is_none() {
+            return Err(DomainError::CabinetNotFound);
+        }
+        let mut exists_cabinet = exists_cabinet.unwrap();
+
+        // Check status
+        let is_hold = exists_cabinet.status == CabinetStatus::Hold;
+        let is_your_hold =
+            exists_cabinet.hold_token.is_some() && exists_cabinet.hold_token == cabinet.hold_token;
+        if !is_hold || !is_your_hold {
+            log::error!(
+                "Cabinet '{}' is not hold: status: {}, token: {:?}, user token: {:?}",
+                exists_cabinet.code,
+                exists_cabinet.status,
+                exists_cabinet.hold_token,
+                cabinet.hold_token,
+            );
+            return Err(DomainError::NotYourHoldCabinet(cabinet.code));
+        }
+
+        // Update cabinet
+        exists_cabinet.status = CabinetStatus::Occupied;
+        exists_cabinet.hold_token = None;
+        exists_cabinet.name = cabinet.name;
+        exists_cabinet.description = cabinet.description;
+        exists_cabinet.password = cabinet.password;
+        exists_cabinet.expire_at = cabinet.expire_at;
+        self.cabinet_repository
+            .update_by_code(exists_cabinet)
+            .await?;
+
+        // Save cabinet items
+        for item in items {
+            self.cabinet_item_repository.save(item).await?;
+        }
+        Ok(())
+    }
+
+    /// Get cabinet by code
+    pub async fn get_by_code(&self, code: i64) -> Result<Cabinet, DomainError> {
+        let cabinet = self.cabinet_repository.find_by_code(code).await?;
+        if let Some(cabinet) = cabinet {
+            Ok(cabinet)
+        } else {
+            Err(DomainError::CabinetNotFound)
+        }
     }
 
     /// Get the status of the cabinets
-    pub async fn status(&self) -> Result<CabinetStatus, DomainError> {
-        let total = self.cabinet_repository.count().await?;
-        let used = self.cabinet_repository.count_used().await?;
-        Ok(CabinetStatus::new(total, used))
+    pub async fn usage(&self) -> Result<CabinetUsage, DomainError> {
+        let used = self
+            .cabinet_repository
+            .count_by_status(CabinetStatus::Occupied)
+            .await?;
+        Ok(CabinetUsage::new(self.cabinets_number, used))
     }
 
     /// Get all the items in a cabinet

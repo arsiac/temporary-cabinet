@@ -1,7 +1,12 @@
 /// Parse command line arguments
 pub(crate) fn parse() -> Args {
     use clap::Parser;
-    Args::parse()
+    let args = Args::parse();
+    if args.cabinet_number == 0 {
+        log::error!("Cabinet number [{}] must be positive.", args.cabinet_number);
+        std::process::exit(1);
+    }
+    args
 }
 
 #[derive(clap::Parser, Debug)]
@@ -33,5 +38,5 @@ pub(crate) struct Args {
 
     /// Cabinet number
     #[arg(long, default_value_t = 100)]
-    pub(crate) cabinet_number: i64,
+    pub(crate) cabinet_number: u64,
 }

@@ -7,10 +7,22 @@ pub mod error {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum DomainError {
         InternalError,
+        CabinetStatusNotSupport(i32),
+        NoAvailableCabinet,
         InvalidCabinetItemCategory(String),
         CabinetNotFound,
         NoEmptyCabinet,
         CabinetItemContentMustNotEmpty,
+        CabinetItemNotFound,
+        InvalidTextSize(usize),
+        InvalidFileSize(String, usize),
+        InvalidTotalSize(usize),
+        InvalidNumberString(String),
+        InvalidHours(i32),
+        CabinetPasswordRequired,
+        CabinetExpireTimeRequired,
+        CabinetHoldTokenRequired,
+        NotYourHoldCabinet(i64),
     }
 
     impl axum::response::IntoResponse for DomainError {

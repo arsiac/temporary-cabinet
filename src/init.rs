@@ -64,7 +64,8 @@ pub(crate) async fn initialize_database(
         .max_connections(10)
         .min_connections(2)
         .connect_timeout(std::time::Duration::from_secs(10))
-        .idle_timeout(std::time::Duration::from_secs(10));
+        .idle_timeout(std::time::Duration::from_secs(10))
+        .sqlx_logging_level(log::LevelFilter::Debug);
     log::debug!("Connecting to database '{}'...", database_file.display());
     let connection = Database::connect(connect_opts).await;
     if let Err(e) = connection {
@@ -80,25 +81,4 @@ pub(crate) async fn initialize_database(
         std::process::exit(1);
     }
     connection
-}
-
-/// Initialize cabinets
-pub(crate) async fn initialize_cabinets(state: &api::ServerState, cabinet_number: i64) {
-    use infrastructure::service::cabinet::create_cabinet_service;
-
-    if cabinet_number <= 0 {
-        eprint!("Cabinet number({}) must great than 0.", cabinet_number);
-        std::process::exit(1);
-    }
-
-    let cabinet_service = create_cabinet_service(&state.connection, &state.data_folder);
-
-    let transaction = infrastructure::database::begin_transaction(&state.connection)
-        .await
-        .unwrap();
-    if cabinet_service.initialize(cabinet_number).await.is_err() {
-        transaction.rollback().await.unwrap();
-        std::process::exit(1);
-    }
-    transaction.commit().await.unwrap();
 }

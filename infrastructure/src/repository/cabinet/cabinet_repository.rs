@@ -1,6 +1,6 @@
 use crate::entity::cabinet::{ActiveModel, Column, Entity, Model};
-use chrono::{Local, TimeZone};
-use domain::entity::cabinet::Cabinet;
+use chrono::{DateTime, Local, TimeZone};
+use domain::entity::cabinet::{Cabinet, CabinetStatus};
 use domain::error::DomainError;
 use domain::repository::cabinet::CabinetRepository as Repository;
 use sea_orm::prelude::*;
@@ -17,14 +17,14 @@ impl CabinetRepository {
 
 #[async_trait::async_trait]
 impl Repository for CabinetRepository {
-    async fn save(&self, cabinet: Cabinet) -> Result<(), DomainError> {
+    async fn save(&self, cabinet: Cabinet) -> Result<Cabinet, DomainError> {
         let model = Model::from(cabinet);
         let active_model = ActiveModel::from(model);
-        active_model.insert(&self.connection).await.map_err(|e| {
+        let model = active_model.insert(&self.connection).await.map_err(|e| {
             log::error!("Failed to insert cabinet: {}", e);
             DomainError::InternalError
         })?;
-        Ok(())
+        Ok(Cabinet::try_from(model)?)
     }
 
     async fn delete_by_code(&self, code: i64) -> Result<(), DomainError> {
@@ -38,21 +38,16 @@ impl Repository for CabinetRepository {
         Ok(())
     }
 
-    async fn delete_unused_pending_destruction(&self) -> Result<(), DomainError> {
-        let result = Entity::delete_many()
-            .filter(Column::Used.eq(false))
-            .filter(Column::PendingDestruction.eq(true))
+    async fn delete_expired(&self, time: DateTime<Local>) -> Result<u64, DomainError> {
+        let res = Entity::delete_many()
+            .filter(Column::ExpireAt.lte(time.naive_local()))
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete unused pending destruction cabinet: {}", e);
+                log::error!("Failed to delete expired cabinets: {}", e);
                 DomainError::InternalError
             })?;
-        log::info!(
-            "Deleted {} unused pending destruction cabinets.",
-            result.rows_affected
-        );
-        Ok(())
+        Ok(res.rows_affected)
     }
 
     async fn update_by_code(&self, cabinet: Cabinet) -> Result<(), DomainError> {
@@ -63,43 +58,15 @@ impl Repository for CabinetRepository {
         active_model.name = ActiveValue::Set(model.name);
         active_model.description = ActiveValue::Set(model.description);
         active_model.password = ActiveValue::Set(model.password);
-        active_model.used = ActiveValue::Set(model.used);
-        active_model.pending_destruction = ActiveValue::Set(model.pending_destruction);
+        active_model.status = ActiveValue::Set(model.status);
+        active_model.hold_token = ActiveValue::Set(model.hold_token);
+        active_model.expire_at = ActiveValue::Set(model.expire_at);
         active_model.update_at = ActiveValue::Set(model.update_at);
         active_model.version = ActiveValue::Set(model.version + 1);
         active_model.update(&self.connection).await.map_err(|e| {
             log::error!("Failed to update cabinet: {}", e);
             DomainError::InternalError
         })?;
-        Ok(())
-    }
-
-    async fn update_pending_destruction_by_codes(
-        &self,
-        codes: Vec<i64>,
-        pending_destruction: bool,
-    ) -> Result<(), DomainError> {
-        use sea_orm::sea_query;
-        Entity::update_many()
-            .col_expr(
-                Column::PendingDestruction,
-                sea_query::Expr::value(pending_destruction),
-            )
-            .col_expr(
-                Column::UpdateAt,
-                sea_query::Expr::value(Local::now().naive_local()),
-            )
-            .col_expr(
-                Column::Version,
-                sea_query::Expr::col(Column::Version).add(1),
-            )
-            .filter(Column::Code.is_in(codes))
-            .exec(&self.connection)
-            .await
-            .map_err(|e| {
-                log::error!("Failed to mark pending destruction: {}", e);
-                DomainError::InternalError
-            })?;
         Ok(())
     }
 
@@ -110,13 +77,13 @@ impl Repository for CabinetRepository {
         })
     }
 
-    async fn count_used(&self) -> Result<u64, DomainError> {
+    async fn count_by_status(&self, status: CabinetStatus) -> Result<u64, DomainError> {
         Entity::find()
-            .filter(Column::Used.eq(true))
+            .filter(Column::Status.eq(status.code()))
             .count(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to count used cabinet: {}", e);
+                log::error!("Failed to count cabinet: {}", e);
                 DomainError::InternalError
             })
     }
@@ -133,43 +100,16 @@ impl Repository for CabinetRepository {
         Ok(count > 0)
     }
 
-    async fn max_code(&self) -> Result<Option<i64>, DomainError> {
-        use sea_orm::{QueryOrder, QuerySelect};
-        Entity::find()
-            .filter(Column::PendingDestruction.eq(false))
-            .order_by_desc(Column::Code)
-            .limit(1)
-            .one(&self.connection)
-            .await
-            .map(|model| model.map(|model| model.code))
-            .map_err(|e| {
-                log::error!("Failed to find max code: {}", e);
-                DomainError::InternalError
-            })
-    }
-
     async fn find_by_code(&self, code: i64) -> Result<Option<Cabinet>, DomainError> {
         Entity::find_by_id(code)
             .one(&self.connection)
             .await
-            .map(|model| model.map(|model| model.into()))
             .map_err(|e| {
                 log::error!("Failed to find cabinet: {}", e);
                 DomainError::InternalError
-            })
-    }
-
-    async fn list_unused(&self) -> Result<Vec<Cabinet>, DomainError> {
-        Entity::find()
-            .filter(Column::Used.eq(false))
-            .filter(Column::PendingDestruction.eq(false))
-            .all(&self.connection)
-            .await
-            .map(|models| models.into_iter().map(|model| model.into()).collect())
-            .map_err(|e| {
-                log::error!("Failed to list unused cabinet: {}", e);
-                DomainError::InternalError
-            })
+            })?
+            .map(Cabinet::try_from)
+            .transpose()
     }
 }
 
@@ -181,8 +121,9 @@ impl From<Cabinet> for Model {
             name: value.name,
             description: value.description,
             password: value.password,
-            used: value.used,
-            pending_destruction: value.pending_destruction,
+            status: value.status.code(),
+            hold_token: value.hold_token,
+            expire_at: value.expire_at.map(|e| e.naive_local()),
             create_at: value.create_at.map(|e| e.naive_local()).unwrap_or(now),
             update_at: value.update_at.map(|e| e.naive_local()).unwrap_or(now),
             version: value.version.unwrap_or(1),
@@ -190,18 +131,22 @@ impl From<Cabinet> for Model {
     }
 }
 
-impl From<Model> for Cabinet {
-    fn from(value: Model) -> Self {
-        Cabinet {
+impl TryFrom<Model> for Cabinet {
+    type Error = DomainError;
+    fn try_from(value: Model) -> Result<Self, Self::Error> {
+        Ok(Cabinet {
             code: value.code,
             name: value.name,
             description: value.description,
             password: value.password,
-            used: value.used,
-            pending_destruction: value.pending_destruction,
+            status: CabinetStatus::try_from(value.status)?,
+            hold_token: value.hold_token,
+            expire_at: value
+                .expire_at
+                .map(|e| Local.from_local_datetime(&e).single().unwrap()),
             create_at: Local.from_local_datetime(&value.create_at).single(),
             update_at: Local.from_local_datetime(&value.update_at).single(),
             version: Some(value.version),
-        }
+        })
     }
 }
