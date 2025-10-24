@@ -1,0 +1,87 @@
+### Use LF in all text files
+* text=auto eol=lf
+
+# Rust
+*.rs text diff=rust eol=lf
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf
+rust-toolchain* text eol=lf
+.clippy.toml text eol=lf
+rustfmt.toml text eol=lf
+
+# JavaScript / TypeScript
+*.js text eol=lf
+*.mjs text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.map text eol=lf
+
+# Vue
+*.vue text eol=lf
+
+# Frontend
+*.css text eol=lf
+*.scss text eol=lf
+*.sass text eol=lf
+*.less text eol=lf
+*.html text eol=lf
+*.svg text eol=lf
+*.md text eol=lf
+
+# Scripts and configuration files
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.fish text eol=lf
+*.ps1 text eol=lf
+*.cmd text eol=lf
+*.bat text eol=lf
+Makefile text eol=lf
+*.mk text eol=lf
+.dockerignore text eol=lf
+.eslint* text eol=lf
+.prettierrc* text eol=lf
+.editorconfig text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.xml text eol=lf
+
+### Ignore binary files
+# Rust
+*.rlib binary
+*.so binary
+*.dylib binary
+*.dll binary
+*.exe binary
+*.pdb binary
+
+# JS / Node
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.tar binary
+*.tar.gz binary
+*.tgz binary
+*.7z binary
+*.bz2 binary
+*.xz binary
+
+# Vue / Web
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.pdf binary
