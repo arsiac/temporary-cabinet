@@ -31,8 +31,8 @@ fn watch_folder(dir: &str) {
 }
 
 fn check_pnpm() {
-    if Command::new("which").arg("pnpm").output().is_err() {
-        eprintln!("cargo:error=pnpm not found in PATH");
+    if Command::new("pnpm").arg("-v").output().is_err() {
+        eprintln!("cargo:error=pnpm not found");
         std::process::exit(1);
     }
 }
