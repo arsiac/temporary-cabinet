@@ -115,6 +115,8 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { getCabinetsUsage, applyCabinet, saveCabinet, getCabinetByCode } from '@/api/cabinet';
+import { getPublicKey } from '@/api/crypto';
+import { sm2Encrypt } from '@/utils/crypto';
 import { inject } from 'vue';
 const dayjs = inject('dayjs');
 
@@ -154,15 +156,23 @@ function uploadChange(_uploadFile, uploadFiles) {
 }
 
 async function lockCabinet() {
-  const form = new FormData();
-  form.set('hold_token', cabinet.value.hold_token);
-  form.set('hours', hours.value);
-  form.append('password', pwd.value);
-  form.append('message', text.value);
-  files.value.forEach((f) => form.append('files', f.raw));
-  await saveCabinet(cabinet.value.code, form);
-  cabinet.value = await getCabinetByCode(cabinet.value.code);
-  step.value = 3;
+  const pk = await getPublicKey();
+  let encryptedPassword = sm2Encrypt(pk, pwd.value);
+
+  try {
+    const form = new FormData();
+    form.set('hold_token', cabinet.value.hold_token);
+    form.set('hours', hours.value);
+    form.set('pk', pk);
+    form.append('password', `04${encryptedPassword}`);
+    form.append('message', text.value);
+    files.value.forEach((f) => form.append('files', f.raw));
+    await saveCabinet(cabinet.value.code, form);
+    cabinet.value = await getCabinetByCode(cabinet.value.code);
+    step.value = 3;
+  } catch (e) {
+    ElMessage.error(e || '锁柜失败，请重试');
+  }
 }
 
 function share() {

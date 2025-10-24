@@ -2,3 +2,4 @@
 
 pub mod cabinet;
 pub mod cabinet_item;
+pub mod keypair;

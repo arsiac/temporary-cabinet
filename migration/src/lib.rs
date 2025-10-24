@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20251022_001_create_table_cabinet;
 mod m20251022_002_create_table_cabinet_item;
+mod m20251024_001_create_table_keypair;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20251022_001_create_table_cabinet::Migration),
             Box::new(m20251022_002_create_table_cabinet_item::Migration),
+            Box::new(m20251024_001_create_table_keypair::Migration),
         ]
     }
 }

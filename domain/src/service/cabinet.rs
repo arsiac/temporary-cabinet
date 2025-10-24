@@ -1,8 +1,8 @@
-use chrono::Local;
-
 use crate::entity::cabinet::{Cabinet, CabinetItem, CabinetStatus, CabinetUsage};
 use crate::error::DomainError;
+use crate::error::cabinet::CabinetError;
 use crate::repository::cabinet::{CabinetItemRepository, CabinetRepository};
+use chrono::Local;
 
 pub struct CabinetService<CR, CIR>
 where
@@ -42,7 +42,7 @@ where
             .count_by_status(CabinetStatus::Occupied)
             .await?;
         if used >= self.cabinets_number {
-            return Err(DomainError::NoAvailableCabinet);
+            return Err(CabinetError::NoAvailableCabinet)?;
         }
 
         loop {
@@ -73,17 +73,17 @@ where
     pub async fn save(&self, cabinet: Cabinet, items: Vec<CabinetItem>) -> Result<(), DomainError> {
         // Check params
         if cabinet.password.is_none() {
-            return Err(DomainError::CabinetPasswordRequired);
+            return Err(CabinetError::PasswordRequired)?;
         }
         if cabinet.expire_at.is_none() {
-            return Err(DomainError::CabinetExpireTimeRequired);
+            return Err(CabinetError::ExpireTimeRequired)?;
         }
         if cabinet.hold_token.is_none() {
-            return Err(DomainError::CabinetHoldTokenRequired);
+            return Err(CabinetError::HoldTokenRequired)?;
         }
         let exists_cabinet = self.cabinet_repository.find_by_code(cabinet.code).await?;
         if exists_cabinet.is_none() {
-            return Err(DomainError::CabinetNotFound);
+            return Err(CabinetError::NotFound)?;
         }
         let mut exists_cabinet = exists_cabinet.unwrap();
 
@@ -99,7 +99,7 @@ where
                 exists_cabinet.hold_token,
                 cabinet.hold_token,
             );
-            return Err(DomainError::NotYourHoldCabinet(cabinet.code));
+            return Err(CabinetError::NotYourHoldCabinet(cabinet.code))?;
         }
 
         // Update cabinet
@@ -128,7 +128,7 @@ where
         if let Some(cabinet) = cabinet {
             Ok(cabinet)
         } else {
-            Err(DomainError::CabinetNotFound)
+            Err(CabinetError::NotFound)?
         }
     }
 
@@ -148,7 +148,7 @@ where
     ) -> Result<Vec<CabinetItem>, DomainError> {
         let exists = self.cabinet_repository.exists_by_code(code).await?;
         if !exists {
-            return Err(DomainError::CabinetNotFound);
+            return Err(CabinetError::NotFound)?;
         }
         self.cabinet_item_repository
             .list_by_cabinet_code(code)

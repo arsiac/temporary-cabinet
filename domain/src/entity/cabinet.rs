@@ -27,7 +27,7 @@ impl TryFrom<i32> for CabinetStatus {
             1 => Ok(CabinetStatus::Vacant),
             2 => Ok(CabinetStatus::Hold),
             3 => Ok(CabinetStatus::Occupied),
-            _ => Err(crate::error::DomainError::CabinetStatusNotSupport(value)),
+            _ => Err(crate::error::cabinet::CabinetError::StatusNotSupport(value))?,
         }
     }
 }
@@ -93,9 +93,9 @@ impl FromStr for CabinetItemCategory {
         match s {
             "text" => Ok(CabinetItemCategory::Text),
             "file" => Ok(CabinetItemCategory::File),
-            _ => Err(crate::error::DomainError::InvalidCabinetItemCategory(
+            _ => Err(crate::error::cabinet::CabinetError::InvalidItemCategory(
                 s.to_string(),
-            )),
+            ))?,
         }
     }
 }

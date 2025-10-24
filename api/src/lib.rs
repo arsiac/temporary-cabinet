@@ -1,10 +1,11 @@
 mod cabinet;
-
+mod crypto;
 /// Backend router
 pub fn router() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/ping", axum::routing::get(ping))
         .nest("/cabinet", cabinet::router())
+        .nest("/crypto", crypto::router())
 }
 
 /// ping the server

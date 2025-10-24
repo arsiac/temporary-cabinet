@@ -2,13 +2,13 @@
   <div class="panel">
     <div class="title">取件</div>
 
-    <el-input v-model="id" placeholder="输入柜子编号，如 8F2C" class="inp" />
+    <el-input v-model="code" placeholder="输入柜子号码" class="inp" />
     <el-input v-model="pwd" type="password" placeholder="输入取件密码" class="inp" />
     <el-button
       type="success"
       size="large"
       class="big-btn"
-      :disabled="!id || !pwd"
+      :disabled="!code || !pwd"
       @click="openCabinet"
     >
       打开
@@ -45,15 +45,9 @@ onMounted(() => {
 async function openCabinet() {
   try {
     const c = await getCabinetByCode(code.value);
-    if (!c.used) return ElMessage.error('柜子不存在');
-    if (c.password !== pwd.value) return ElMessage.error('密码错误');
-    if (Date.now() > c.expireAt) {
-      ElMessage.error('柜子已过期');
-      return clearCabinet();
-    }
     cabinet.value = c;
-  } catch {
-    ElMessage.error('柜子不存在');
+  } catch (e) {
+    ElMessage.error(e || '取件失败');
   }
 }
 

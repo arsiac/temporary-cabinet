@@ -4,6 +4,7 @@ use std::str::FromStr;
 use crate::entity::cabinet_item::{ActiveModel, Column, Entity, Model};
 use domain::entity::cabinet::{CabinetItem, CabinetItemCategory};
 use domain::error::DomainError;
+use domain::error::cabinet::CabinetError;
 use domain::repository::cabinet::CabinetItemRepository as Repository;
 use sea_orm::{QueryOrder, prelude::*};
 
@@ -68,7 +69,7 @@ impl Repository for CabinetItemRepository {
         let content = if let Some(content) = item.content.as_ref() {
             content
         } else {
-            return Err(DomainError::CabinetItemContentMustNotEmpty);
+            return Err(CabinetError::ItemContentMustNotEmpty)?;
         };
 
         // Write content to filesystem
@@ -96,7 +97,7 @@ impl Repository for CabinetItemRepository {
     async fn delete_by_id(&self, id: i64) -> Result<(), DomainError> {
         let item = self.find_model_by_id(id).await?;
         if item.is_none() {
-            return Err(DomainError::CabinetItemNotFound);
+            return Err(CabinetError::CabinetItemNotFound)?;
         }
         let item = item.unwrap();
         let item_category = CabinetItemCategory::from_str(&item.category)?;

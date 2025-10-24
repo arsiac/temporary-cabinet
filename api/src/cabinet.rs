@@ -5,7 +5,10 @@ use domain::entity::cabinet::{
     Cabinet, CabinetItem, CabinetItemCategory, CabinetStatus, CabinetUsage,
 };
 use domain::error::DomainError;
+use domain::error::cabinet::CabinetError;
+use domain::error::crypto::CryptoError;
 use infrastructure::service::cabinet::create_cabinet_service;
+use infrastructure::service::crypto::create_sm2_crypto_service;
 
 /// Cabinet router
 pub(crate) fn router() -> axum::Router<ServerState> {
@@ -60,6 +63,7 @@ pub(crate) async fn save(
     const MAX_FILE_SIZE: usize = 2 * 1024 * 1024;
     const MAX_TOTAL_SIZE: usize = 10 * 1024 * 1024;
 
+    let mut public_key = None;
     let mut cabinet = Cabinet::new(cabinet_code, None, None, CabinetStatus::Hold, None, None);
     let mut items = Vec::new();
     let mut order = 1;
@@ -77,15 +81,27 @@ pub(crate) async fn save(
             }
             continue;
         }
+        if field.name() == Some("pk") {
+            match field.text().await {
+                Ok(pk) => {
+                    public_key = Some(pk);
+                }
+                Err(e) => {
+                    log::error!("Failed to read pk: {:?}", e);
+                    return Err(DomainError::InternalError);
+                }
+            }
+            continue;
+        }
         if field.name() == Some("hours") {
             match field.text().await {
                 Ok(text) => {
                     let hour = text.parse::<i32>().map_err(|e| {
                         log::error!("Failed to read hours: {:?}", e);
-                        DomainError::InvalidNumberString(text)
+                        CabinetError::InvalidNumberString(text)
                     })?;
                     if !(0..=24).contains(&hour) {
-                        return Err(DomainError::InvalidHours(hour));
+                        return Err(CabinetError::InvalidHours(hour))?;
                     }
                     cabinet.expire_at = Some(Local::now() + chrono::Duration::hours(hour as i64));
                 }
@@ -112,7 +128,7 @@ pub(crate) async fn save(
             let bytes = field.text().await.unwrap().into_bytes();
             let text_size = bytes.len();
             if text_size > MAX_MSG_SIZE {
-                return Err(DomainError::InvalidTextSize(text_size));
+                return Err(CabinetError::InvalidTextSize(text_size))?;
             }
 
             let text_item = CabinetItem::new(
@@ -144,7 +160,7 @@ pub(crate) async fn save(
             if let Some(bytes) = bytes {
                 let file_size = bytes.len();
                 if file_size > MAX_FILE_SIZE {
-                    return Err(DomainError::InvalidFileSize(filename, file_size));
+                    return Err(CabinetError::InvalidFileSize(filename, file_size))?;
                 }
                 let file_item = CabinetItem::new(
                     cabinet_code * 10 + order,
@@ -162,13 +178,45 @@ pub(crate) async fn save(
     }
 
     if total_size > MAX_TOTAL_SIZE {
-        return Err(DomainError::InvalidTotalSize(total_size));
+        return Err(CabinetError::InvalidTotalSize(total_size))?;
     }
 
     // Set expire_at if not set
     if cabinet.expire_at.is_none() {
         cabinet.expire_at = Some(Local::now() + chrono::Duration::hours(1));
     }
+
+    if public_key.is_none() {
+        return Err(CabinetError::PublicKeyRequired)?;
+    }
+
+    if cabinet.password.is_none() {
+        return Err(CabinetError::PasswordRequired)?;
+    }
+    let public_key = public_key.unwrap();
+    let crypto_service = create_sm2_crypto_service(state.connection.clone());
+    let keypair = crypto_service.get_by_public_key(&public_key).await?;
+    if keypair.is_none() {
+        return Err(CryptoError::NotFound)?;
+    }
+    let keypair = keypair.unwrap();
+    if keypair.expire_at < Local::now() {
+        log::error!(
+            "Keypair with public key '{}' has expired at {}",
+            public_key,
+            keypair.expire_at
+        );
+        return Err(CryptoError::KeypairExpired)?;
+    }
+    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
+    let encrypted_bytes = domain::service::crypto::hex2bytes(cabinet.password.as_ref().unwrap())?;
+    let password_bytes = domain::service::crypto::decrypt(&secret_key, &encrypted_bytes)?;
+    let password = String::from_utf8(password_bytes).map_err(|e| {
+        log::error!("Failed to convert password bytes to utf-8 string: {}", e);
+        DomainError::InternalError
+    })?;
+    cabinet.password = Some(password);
+    crypto_service.delete_by_id(keypair.id.unwrap()).await?;
 
     let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
     let service =
