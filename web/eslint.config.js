@@ -26,6 +26,7 @@ export default [
     files: ['**/*.vue'],
     rules: {
       'vue/multi-word-component-names': 'off',
+      'vue/no-v-model-argument': 'off',
     },
   },
   prettierRecommended,

@@ -114,9 +114,11 @@ where
             .await?;
 
         // Save cabinet items
+        let item_size = items.len();
         for item in items {
             self.cabinet_item_repository.save(item).await?;
         }
+        log::info! {"Cabinet '{}' locked with {} items.", cabinet.code, item_size};
         Ok(())
     }
 

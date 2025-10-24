@@ -34,17 +34,17 @@ import { getCabinetByCode } from '@/api/cabinet';
 import { ElMessage } from 'element-plus';
 
 const route = useRoute();
-const id = ref(route.query.c || '');
+const code = ref(route.query.c || '');
 const pwd = ref('');
 const cabinet = ref({});
 
 onMounted(() => {
-  if (id.value) ElMessage.info('已填入编号，请输入密码');
+  if (code.value) ElMessage.info('已填入编号，请输入密码');
 });
 
 async function openCabinet() {
   try {
-    const c = await getCabinetByCode(id.value);
+    const c = await getCabinetByCode(code.value);
     if (!c.used) return ElMessage.error('柜子不存在');
     if (c.password !== pwd.value) return ElMessage.error('密码错误');
     if (Date.now() > c.expireAt) {
@@ -59,7 +59,7 @@ async function openCabinet() {
 
 async function clearCabinet() {
   ElMessage.success('柜子已回收');
-  id.value = '';
+  code.value = '';
   pwd.value = '';
   cabinet.value = {};
 }

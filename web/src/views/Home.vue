@@ -22,30 +22,37 @@
 
     <!-- 屏1 存入内容 -->
     <template v-if="step === 1">
+      <div class="cabinet-bar">
+        <span class="title"
+          >柜子 <span class="code">{{ cabinet.code }}</span></span
+        >
+      </div>
+
       <div class="step-dot">1 / 4</div>
-      <div class="title">把东西丢进来</div>
 
-      <el-upload drag :limit="1" :before-upload="beforeUpload" class="drop">
+      <div class="label">存一些消息</div>
+
+      <el-input v-model="text" type="textarea" :rows="4" placeholder="贴一段文字…" class="txt" />
+      <div class="label">或者放一些文件</div>
+
+      <!-- 多文件上传 -->
+      <el-upload drag multiple :auto-upload="false" :on-change="uploadChange">
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div>点击或拖拽文件（≤10MB）</div>
+        <div class="el-upload__text">拖拽或点击上传文件</div>
+        <template #tip>
+          <div class="el-upload__tip">单位文件大小不超过 2MB, 文件总大小不超过 10MB</div>
+        </template>
       </el-upload>
-
-      <el-input
-        v-model="text"
-        type="textarea"
-        :rows="4"
-        placeholder="或者贴一段文字…"
-        class="txt"
-      />
 
       <el-button
         type="success"
         size="large"
         class="big-btn"
-        :disabled="!text && !file"
+        :disabled="!text && files.length === 0"
         @click="toLock"
-        >下一步</el-button
       >
+        下一步
+      </el-button>
       <el-button link @click="step = 0">← 返回</el-button>
     </template>
 
@@ -88,11 +95,12 @@
     <template v-if="step === 3">
       <div class="step-dot green">3 / 4</div>
       <el-result icon="success" title="柜子已锁好">
-        <template #subTitle>
-          柜子编号：<b class="code">{{ cabinet.id }}</b
-          ><br />
-          取件密码：●●●●<br />
-          到期时间：{{ expire }}
+        <template #sub-title>
+          <div style="text-align: left">
+            <p>柜子编号：{{ cabinet.code }}</p>
+            <p>取件密码：●●●●</p>
+            <p>到期时间：{{ dayjs(cabinet.expire_at).format('YYYY-MM-DD HH:mm:ss') }}</p>
+          </div>
         </template>
         <template #extra>
           <el-button type="success" @click="share">把编号发给我</el-button>
@@ -106,16 +114,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { getCabinetsUsage, applyCabinet, saveCabinet } from '@/api/cabinet';
+import { getCabinetsUsage, applyCabinet, saveCabinet, getCabinetByCode } from '@/api/cabinet';
+import { inject } from 'vue';
+const dayjs = inject('dayjs');
 
 const step = ref(0);
 const stats = ref({ total: 0, used: 0, free: 0 });
 const text = ref('');
-const file = ref([]);
+const files = ref([]);
 const pwd = ref('');
 const hours = ref(1);
 const cabinet = ref({});
-const expire = ref('');
 
 onMounted(() => fetchUsage());
 
@@ -136,17 +145,12 @@ async function apply() {
   }
 }
 
-function beforeUpload(f) {
-  if (f.size > 2 * 1024 * 1024) {
-    ElMessage.warning('文件过大');
-    return false;
-  }
-  file.value.push(f);
-  return false;
-}
-
 function toLock() {
   step.value = 2;
+}
+
+function uploadChange(_uploadFile, uploadFiles) {
+  files.value = uploadFiles;
 }
 
 async function lockCabinet() {
@@ -155,15 +159,15 @@ async function lockCabinet() {
   form.set('hours', hours.value);
   form.append('password', pwd.value);
   form.append('message', text.value);
-  file.value.forEach((f) => form.append('files', f));
+  files.value.forEach((f) => form.append('files', f.raw));
   await saveCabinet(cabinet.value.code, form);
+  cabinet.value = await getCabinetByCode(cabinet.value.code);
   step.value = 3;
-  fetchUsage();
 }
 
 function share() {
-  const url = `${location.origin}/pick?c=${cabinet.value.id}`;
-  const text = `柜子编号 ${cabinet.value.id}，链接 ${url}`;
+  const url = `${location.origin}/pick?c=${cabinet.value.code}`;
+  const text = `柜子编号 ${cabinet.value.code}，链接 ${url}`;
   if (navigator.share) navigator.share({ title: '临时柜子', text });
   else navigator.clipboard.writeText(text);
   ElMessage.success('已复制');
@@ -171,9 +175,9 @@ function share() {
 
 function reset() {
   text.value = '';
-  file.value = null;
+  files.value = [];
   pwd.value = '';
-  hours.value = 24;
+  hours.value = 1;
   step.value = 0;
   fetchUsage();
 }
@@ -239,8 +243,81 @@ function reset() {
 .inp {
   margin-bottom: 12px;
 }
-.code {
-  font-size: 32px;
-  letter-spacing: 4px;
+
+/* 1. 柜子编号 - 卡片式高亮 */
+.cabinet-bar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  margin: 0 auto 20px;
+  width: 100%;
+}
+.cabinet-bar .title {
+  color: #000; /* 黑色 */
+  font-weight: normal;
+  margin-bottom: 0;
+}
+.cabinet-bar .code {
+  margin-left: 6px;
+  font-size: 20px;
+  font-weight: bold;
+  font-family: Menlo, monospace;
+  color: var(--el-color-success);
+}
+
+/* 2. 步骤点 */
+.step-dot {
+  text-align: center;
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+/* 3. label 主次区分 */
+.label {
+  font-size: 15px;
+  color: #303133;
+  margin: 16px 0 8px;
+  font-weight: 500;
+  position: relative;
+  padding-left: 12px;
+}
+.label::before {
+  /* 左侧色条 */
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background: #00c389;
+  border-radius: 2px;
+}
+.label:nth-of-type(2) {
+  /* 第二个 label 降一级 */
+  font-size: 14px;
+  color: #606266;
+}
+.label:nth-of-type(2)::before {
+  background: #dcdfe6;
+}
+
+/* 4. 上传区域微调 */
+.el-upload__text {
+  font-size: 14px;
+  color: #606266;
+}
+.el-upload__tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+/* 5. 按钮保持原样 */
+.big-btn {
+  width: 100%;
+  margin: 20px 0 8px;
 }
 </style>

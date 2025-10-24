@@ -1,9 +1,6 @@
 mod arg;
 mod init;
 
-/// Index file
-static INDEX_FILE: &str = "index.html";
-
 /// Application entrypoint
 /// - Initialization Log (simple_logger)
 /// - Build routes
@@ -30,9 +27,9 @@ fn router(state: api::ServerState) -> axum::Router {
     use tower_http::{compression::CompressionLayer, decompression::RequestDecompressionLayer};
 
     let static_service = axum_embed::ServeEmbed::<web::WebAssets>::with_parameters(
-        Some(INDEX_FILE.to_string()),
-        axum_embed::FallbackBehavior::Redirect,
-        Some(INDEX_FILE.to_string()),
+        Some("/".to_string()),
+        axum_embed::FallbackBehavior::Ok,
+        Some("index.html".to_string()),
     );
     axum::Router::new()
         .nest("/api", api::router().with_state(state))
