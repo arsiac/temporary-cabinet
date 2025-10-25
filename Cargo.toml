@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 web.workspace = true
-api.workspace = true
+interface.workspace = true
 migration.workspace = true
 infrastructure.workspace = true
 log.workspace = true
@@ -20,7 +20,7 @@ sea-orm.workspace = true
 
 
 [workspace]
-members = [".", "api", "domain", "web", "migration", "infrastructure"]
+members = [".", "interface", "domain", "web", "migration", "infrastructure"]
 
 [workspace.package]
 version = "0.1.0"
@@ -29,7 +29,7 @@ edition = "2024"
 [workspace.dependencies]
 # Self
 web.path = "web"
-api.path = "api"
+interface.path = "interface"
 domain.path = "domain"
 migration.path = "migration"
 infrastructure.path = "infrastructure"
@@ -45,6 +45,7 @@ rust-embed = "8"
 rand = "0.9.2"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 axum-embed = "0.1.0"
+rust-i18n = "3.1.5"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 sea-orm = { version = "1.1.17", features = [

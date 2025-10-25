@@ -11,7 +11,7 @@ async fn main() {
     init::initialize_logger(args.debug);
     let data_folder = init::initialize_data_folder(args.data_dir);
     let connection = init::initialize_database(&data_folder).await;
-    let state = api::ServerState::new(connection, data_folder, args.cabinet_number);
+    let state = interface::ServerState::new(connection, data_folder, args.cabinet_number);
     let serv_addr = format!("{}:{}", args.host, args.port);
     let listener = tokio::net::TcpListener::bind(&serv_addr).await;
     if let Err(e) = listener {
@@ -23,7 +23,7 @@ async fn main() {
 }
 
 /// Merge front-end and back-end routes and configure middleware
-fn router(state: api::ServerState) -> axum::Router {
+fn router(state: interface::ServerState) -> axum::Router {
     use axum::extract::DefaultBodyLimit;
     use tower_http::{compression::CompressionLayer, decompression::RequestDecompressionLayer};
 
@@ -33,7 +33,7 @@ fn router(state: api::ServerState) -> axum::Router {
         Some("index.html".to_string()),
     );
     axum::Router::new()
-        .nest("/api", api::router().with_state(state))
+        .nest("/api", interface::router().with_state(state))
         .fallback_service(static_service)
         .layer(
             tower::ServiceBuilder::new()

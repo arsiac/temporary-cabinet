@@ -1,5 +1,6 @@
 mod cabinet;
 mod crypto;
+
 /// Backend router
 pub fn router() -> axum::Router<ServerState> {
     axum::Router::new()

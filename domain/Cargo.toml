@@ -5,12 +5,11 @@ edition.workspace = true
 
 [dependencies]
 async-trait.workspace = true
-axum.workspace = true
 chrono.workspace = true
 gm-sm2.workspace = true
 log.workspace = true
 hex.workspace = true
 rand.workspace = true
+rust-i18n.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 uuid.workspace = true

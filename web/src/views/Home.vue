@@ -112,7 +112,7 @@
           </div>
         </template>
         <template #extra>
-          <el-button type="success" @click="share">把编号发给我</el-button>
+          <el-button type="success" @click="share">复制共享地址</el-button>
           <el-button @click="reset">再存一个</el-button>
         </template>
       </el-result>
@@ -214,8 +214,7 @@ async function lockCabinet() {
 function share() {
   const url = `${location.origin}/pick?c=${cabinet.value.code}`;
   const text = `柜子编号 ${cabinet.value.code}，链接 ${url}`;
-  if (navigator.share) navigator.share({ title: '临时柜子', text });
-  else navigator.clipboard.writeText(text);
+  navigator.clipboard.writeText(text);
   ElMessage.success('已复制');
 }
 

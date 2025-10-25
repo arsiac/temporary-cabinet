@@ -98,11 +98,11 @@ where
             exists_cabinet.hold_token.is_some() && exists_cabinet.hold_token == cabinet.hold_token;
         if !is_hold || !is_your_hold {
             log::error!(
-                "Cabinet '{}' is not hold: status: {}, token: {:?}, user token: {:?}",
+                "Cabinet '{}' is not hold by {:?}: status: {}, token: {:?}",
                 exists_cabinet.code,
+                cabinet.hold_token,
                 exists_cabinet.status,
                 exists_cabinet.hold_token,
-                cabinet.hold_token,
             );
             return Err(CabinetError::NotYourHoldCabinet(cabinet.code))?;
         }
@@ -155,6 +155,15 @@ where
     /// Get cabinet by code
     pub async fn get_by_code(&self, code: i64) -> Result<Option<Cabinet>, DomainError> {
         self.cabinet_repository.find_by_code(code).await
+    }
+
+    /// Get non-none cabinet by code
+    pub async fn get_nonnone_by_code(&self, code: i64) -> Result<Cabinet, DomainError> {
+        let cabinet = self.cabinet_repository.find_by_code(code).await?;
+        if cabinet.is_none() {
+            return Err(CabinetError::NotFound)?;
+        }
+        Ok(cabinet.unwrap())
     }
 
     /// Get the status of the cabinets

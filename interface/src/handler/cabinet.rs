@@ -1,4 +1,6 @@
-use crate::ServerState;
+use crate::error::InterfaceError;
+use crate::extract::AcceptLanguage;
+use crate::handler::ServerState;
 use axum::extract::{Json, Path, Query, State};
 use chrono::{DateTime, Local};
 use domain::entity::cabinet::{
@@ -30,10 +32,14 @@ pub(crate) fn router() -> axum::Router<ServerState> {
 #[axum::debug_handler]
 pub(crate) async fn apply(
     State(state): State<ServerState>,
-) -> Result<Json<CabinetView>, DomainError> {
+    AcceptLanguage(language): AcceptLanguage,
+) -> Result<Json<CabinetView>, InterfaceError> {
     let service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
-    let cabinet = service.apply().await?;
+    let cabinet = service
+        .apply()
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     Ok(Json(CabinetView::from(cabinet)))
 }
 
@@ -41,10 +47,14 @@ pub(crate) async fn apply(
 #[axum::debug_handler]
 pub(crate) async fn usage(
     State(state): State<ServerState>,
-) -> Result<Json<CabinetUsage>, DomainError> {
+    AcceptLanguage(language): AcceptLanguage,
+) -> Result<Json<CabinetUsage>, InterfaceError> {
     let service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
-    let status = service.usage().await?;
+    let status = service
+        .usage()
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     Ok(Json(status))
 }
 
@@ -52,24 +62,26 @@ pub(crate) async fn usage(
 #[axum::debug_handler]
 pub(crate) async fn get_by_code(
     State(state): State<ServerState>,
+    AcceptLanguage(language): AcceptLanguage,
     Path(cabinet_code): Path<i64>,
-) -> Result<Json<CabinetView>, DomainError> {
+) -> Result<Json<CabinetView>, InterfaceError> {
     let service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
-    let cabinet = service.get_by_code(cabinet_code).await?;
-    if cabinet.is_none() {
-        return Err(CabinetError::NotFound)?;
-    }
-    Ok(Json(CabinetView::from(cabinet.unwrap())))
+    let cabinet = service
+        .get_nonnone_by_code(cabinet_code)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
+    Ok(Json(CabinetView::from(cabinet)))
 }
 
 /// Save cabinet items and update cabinet status to `Occupied`
 #[axum::debug_handler]
 pub(crate) async fn save(
     State(state): State<ServerState>,
+    AcceptLanguage(language): AcceptLanguage,
     Path(cabinet_code): Path<i64>,
     mut multipart: axum::extract::Multipart,
-) -> Result<Json<CabinetView>, DomainError> {
+) -> Result<Json<CabinetView>, InterfaceError> {
     const MAX_MSG_SIZE: usize = 2000;
     const MAX_FILE_SIZE: usize = 2 * 1024 * 1024;
     const MAX_TOTAL_SIZE: usize = 10 * 1024 * 1024;
@@ -85,7 +97,7 @@ pub(crate) async fn save(
             Ok(None) => break,
             Err(e) => {
                 log::error!("Failed to read multipart field: {e:?}");
-                return Err(DomainError::InternalError);
+                return Err(InterfaceError::new(language, DomainError::InternalError));
             }
         };
 
@@ -102,7 +114,8 @@ pub(crate) async fn save(
                 }
                 Err(e) => {
                     log::error!("Failed to read password: {e:?}");
-                    return Err(DomainError::InternalError);
+
+                    return Err(InterfaceError::new(language, DomainError::InternalError));
                 }
             },
             "public_key" => match field.text().await {
@@ -111,7 +124,7 @@ pub(crate) async fn save(
                 }
                 Err(e) => {
                     log::error!("Failed to read pk: {e:?}");
-                    return Err(DomainError::InternalError);
+                    return Err(InterfaceError::new(language, DomainError::InternalError));
                 }
             },
 
@@ -119,16 +132,19 @@ pub(crate) async fn save(
                 Ok(text) => {
                     let hour = text.parse::<i32>().map_err(|e| {
                         log::error!("Failed to read hours: {e:?}");
-                        CabinetError::InvalidNumberString(text)
+                        InterfaceError::new(
+                            language,
+                            CabinetError::InvalidNumberString(text).into(),
+                        )
                     })?;
                     if !(0..=24).contains(&hour) {
-                        return Err(CabinetError::InvalidHours(hour))?;
+                        return Err(InterfaceError::new(language, DomainError::InternalError));
                     }
                     cabinet.expire_at = Some(Local::now() + chrono::Duration::hours(hour as i64));
                 }
                 Err(e) => {
                     log::error!("Failed to read hours: {e:?}");
-                    return Err(DomainError::InternalError);
+                    return Err(InterfaceError::new(language, DomainError::InternalError));
                 }
             },
             "hold_token" => match field.text().await {
@@ -137,14 +153,17 @@ pub(crate) async fn save(
                 }
                 Err(e) => {
                     log::error!("Failed to read hold_token: {e:?}");
-                    return Err(DomainError::InternalError);
+                    return Err(InterfaceError::new(language, DomainError::InternalError));
                 }
             },
             "message" => {
                 let bytes = field.text().await.unwrap().into_bytes();
                 let text_size = bytes.len();
                 if text_size > MAX_MSG_SIZE {
-                    return Err(CabinetError::InvalidTextSize(text_size))?;
+                    return Err(InterfaceError::new(
+                        language,
+                        CabinetError::InvalidTextSize(text_size).into(),
+                    ))?;
                 }
 
                 let text_item = CabinetItem::new(
@@ -171,11 +190,14 @@ pub(crate) async fn save(
                 let filename = filename.to_string();
                 let bytes = field.bytes().await.map_err(|e| {
                     log::error!("Failed to read file '{filename}': {e:?}");
-                    DomainError::InternalError
+                    InterfaceError::new(language, DomainError::InternalError)
                 })?;
                 let file_size = bytes.len();
                 if file_size > MAX_FILE_SIZE {
-                    return Err(CabinetError::InvalidFileSize(filename, file_size))?;
+                    return Err(InterfaceError::new(
+                        language,
+                        CabinetError::InvalidFileSize(filename, file_size).into(),
+                    ))?;
                 }
                 let file_item = CabinetItem::new(
                     cabinet_code * 10 + order,
@@ -202,7 +224,10 @@ pub(crate) async fn save(
     }
 
     if total_size > MAX_TOTAL_SIZE {
-        return Err(CabinetError::InvalidTotalSize(total_size))?;
+        return Err(InterfaceError::new(
+            language,
+            CabinetError::InvalidTotalSize(total_size).into(),
+        ));
     }
 
     // Set expire_at if not set
@@ -211,31 +236,51 @@ pub(crate) async fn save(
     }
 
     if public_key.is_none() {
-        return Err(CabinetError::PublicKeyRequired)?;
+        return Err(InterfaceError::new(
+            language,
+            CabinetError::PublicKeyRequired.into(),
+        ));
     }
 
     if cabinet.password.is_none() {
-        return Err(CabinetError::PasswordRequired)?;
+        return Err(InterfaceError::new(
+            language,
+            CabinetError::PasswordRequired.into(),
+        ));
     }
 
-    let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
+    let transaction = infrastructure::database::begin_transaction(&state.connection)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     let public_key = public_key.unwrap();
     let crypto_service = create_sm2_crypto_service(state.connection.clone());
     let keypair = crypto_service
         .get_effective_by_public_key(&public_key)
-        .await?;
-    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
+    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)
+        .map_err(|e| InterfaceError::new(language, e.into()))?;
     let password = domain::service::crypto::decrypt_hex_to_plaintext(
         &secret_key,
         cabinet.password.as_ref().unwrap(),
-    )?;
+    )
+    .map_err(|e| InterfaceError::new(language, e.into()))?;
     cabinet.password = Some(password);
-    crypto_service.delete_by_id(keypair.id.unwrap()).await?;
+    crypto_service
+        .delete_by_id(keypair.id.unwrap())
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
 
     let cabinet_service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
-    let cabinet = cabinet_service.save(cabinet, items).await?;
-    transaction.commit().await?;
+    let cabinet = cabinet_service
+        .save(cabinet, items)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
+    transaction
+        .commit()
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     Ok(Json(CabinetView::from(cabinet)))
 }
 
@@ -243,19 +288,30 @@ pub(crate) async fn save(
 #[axum::debug_handler]
 pub(crate) async fn delete_cabinet(
     State(state): State<ServerState>,
+    AcceptLanguage(language): AcceptLanguage,
     Path(cabinet_code): Path<i64>,
     Json(credential): Json<CabinetCredential>,
-) -> Result<Json<bool>, DomainError> {
-    let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
-    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
+) -> Result<Json<bool>, InterfaceError> {
+    let transaction = infrastructure::database::begin_transaction(&state.connection)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
         state.cabinet_number,
     );
 
-    cabinet_service.delete_by_code(cabinet_code).await?;
-    transaction.commit().await?;
+    cabinet_service
+        .delete_by_code(cabinet_code)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
+    transaction
+        .commit()
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     Ok(Json(true))
 }
 
@@ -263,10 +319,13 @@ pub(crate) async fn delete_cabinet(
 #[axum::debug_handler]
 pub(crate) async fn items(
     State(state): State<ServerState>,
+    AcceptLanguage(language): AcceptLanguage,
     Path(cabinet_code): Path<i64>,
     Json(credential): Json<CabinetCredential>,
-) -> Result<Json<Vec<CabinetItemView>>, DomainError> {
-    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
+) -> Result<Json<Vec<CabinetItemView>>, InterfaceError> {
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
@@ -274,7 +333,8 @@ pub(crate) async fn items(
     );
     let items = cabinet_service
         .list_items_by_cabinet_code(cabinet_code)
-        .await?;
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     Ok(Json(
         items
             .into_iter()
@@ -287,27 +347,41 @@ pub(crate) async fn items(
 #[axum::debug_handler]
 pub(crate) async fn get_item_content(
     State(state): State<ServerState>,
+    AcceptLanguage(language): AcceptLanguage,
     Path((cabinet_code, item_id)): Path<(i64, i64)>,
     Query(params): Query<CabinetItemContentParams>,
     Json(credential): Json<CabinetCredential>,
-) -> Result<axum::response::Response, DomainError> {
+) -> Result<axum::response::Response, InterfaceError> {
     use axum::body::Body;
     use axum::http::header::HeaderValue;
     use axum::response::Response;
-    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential)
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?;
     let cabinet_service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
     // Get item
     let item = cabinet_service
         .get_item_by_id(item_id, true)
-        .await?
-        .ok_or(CabinetError::NotFound)?;
+        .await
+        .map_err(|e| InterfaceError::new(language, e))?
+        .ok_or(InterfaceError::new(
+            language,
+            CabinetError::CabinetItemNotFound.into(),
+        ))?;
+
+    let content = item.content.ok_or(InterfaceError::new(
+        language,
+        CabinetError::InvalidItemContent.into(),
+    ))?;
     match params.mode.as_str() {
         "text" => {
             if item.category != CabinetItemCategory::Text {
-                return Err(CabinetError::ItemNotSupportMode(params.mode))?;
+                return Err(InterfaceError::new(
+                    language,
+                    CabinetError::ItemNotSupportMode(params.mode).into(),
+                ))?;
             }
-            let content = item.content.ok_or(CabinetError::InvalidItemContent)?;
             Ok(Response::builder()
                 .header(
                     axum::http::header::CONTENT_TYPE,
@@ -316,21 +390,21 @@ pub(crate) async fn get_item_content(
                 .body(Body::from(content))
                 .unwrap())
         }
-        "file" => {
-            let content = item.content.ok_or(CabinetError::InvalidItemContent)?;
-            Ok(Response::builder()
-                .header(
-                    axum::http::header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/octet-stream"),
-                )
-                .header(
-                    axum::http::header::CONTENT_DISPOSITION,
-                    format!("attachment; filename={}", item.name),
-                )
-                .body(Body::from(content))
-                .unwrap())
-        }
-        _ => Err(CabinetError::ItemNotSupportMode(params.mode))?,
+        "file" => Ok(Response::builder()
+            .header(
+                axum::http::header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            )
+            .header(
+                axum::http::header::CONTENT_DISPOSITION,
+                format!("attachment; filename={}", item.name),
+            )
+            .body(Body::from(content))
+            .unwrap()),
+        _ => Err(InterfaceError::new(
+            language,
+            CabinetError::ItemNotSupportMode(params.mode).into(),
+        ))?,
     }
 }
 
