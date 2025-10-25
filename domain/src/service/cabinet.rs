@@ -33,6 +33,7 @@ where
     CR: CabinetRepository,
     CIR: CabinetItemRepository,
 {
+    /// Apply for a cabinet
     pub async fn apply(&self) -> Result<Cabinet, DomainError> {
         let now = Local::now();
         let deleted_count = self.cabinet_repository.delete_expired(now).await?;
@@ -124,6 +125,31 @@ where
         }
         log::info! {"Cabinet '{}' locked with {} items.", cabinet.code, item_size};
         Ok(exists_cabinet)
+    }
+
+    /// Delete cabinet and items by code
+    pub async fn delete_by_code(&self, cabinet_code: i64) -> Result<(), DomainError> {
+        let exists = self.cabinet_repository.exists_by_code(cabinet_code).await?;
+        if !exists {
+            return Err(CabinetError::NotFound)?;
+        }
+        log::info!("Delete cabinet '{cabinet_code}'");
+        self.cabinet_repository.delete_by_code(cabinet_code).await?;
+
+        let items = self
+            .cabinet_item_repository
+            .list_by_cabinet_code(cabinet_code)
+            .await?;
+        for item in items {
+            log::debug!(
+                "Delete cabinet item by id '{}': category is '{}', name is '{}'",
+                item.id,
+                item.category,
+                item.name
+            );
+            self.cabinet_item_repository.delete_by_id(item.id).await?;
+        }
+        Ok(())
     }
 
     /// Get cabinet by code

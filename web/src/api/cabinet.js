@@ -79,6 +79,22 @@ export function saveCabinet(cabinetCode, form) {
 }
 
 /**
+ * Delete cabinet and items
+ *
+ * @param {number} cabinetCode - Cabinet Code
+ * @param {object} credential - Credential
+ * @param {string} credential.password - Password to decrypt the cabinet
+ * @param {string} credential.public_key - Public key to encrypt the password
+ */
+export function deleteCabinet(cabinetCode, credential) {
+  return request({
+    url: `/api/cabinet/${cabinetCode}`,
+    method: 'delete',
+    data: credential,
+  });
+}
+
+/**
  * Get cabinet items
  *
  * @param {number} cabinetCode - Cabinet Code

@@ -15,7 +15,10 @@ pub(crate) fn router() -> axum::Router<ServerState> {
     axum::Router::new()
         .route("/apply", post(apply))
         .route("/usage", get(usage))
-        .route("/{cabinet_code}", get(get_by_code).post(save))
+        .route(
+            "/{cabinet_code}",
+            get(get_by_code).post(save).delete(delete_cabinet),
+        )
         .route("/{cabinet_code}/items", post(items))
         .route(
             "/{cabinet_code}/item/{item_id}/content",
@@ -45,6 +48,7 @@ pub(crate) async fn usage(
     Ok(Json(status))
 }
 
+/// Get cabinet by code
 #[axum::debug_handler]
 pub(crate) async fn get_by_code(
     State(state): State<ServerState>,
@@ -59,6 +63,7 @@ pub(crate) async fn get_by_code(
     Ok(Json(CabinetView::from(cabinet.unwrap())))
 }
 
+/// Save cabinet items and update cabinet status to `Occupied`
 #[axum::debug_handler]
 pub(crate) async fn save(
     State(state): State<ServerState>,
@@ -89,9 +94,7 @@ pub(crate) async fn save(
             continue;
         }
         let field_name = field_name.unwrap().to_string();
-        log::debug!(
-            "Cabinet '{cabinet_code}' save with field '{field_name}'."
-        );
+        log::debug!("Cabinet '{cabinet_code}' save with field '{field_name}'.");
         match field_name.as_str() {
             "password" => match field.text().await {
                 Ok(password) => {
@@ -214,6 +217,8 @@ pub(crate) async fn save(
     if cabinet.password.is_none() {
         return Err(CabinetError::PasswordRequired)?;
     }
+
+    let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
     let public_key = public_key.unwrap();
     let crypto_service = create_sm2_crypto_service(state.connection.clone());
     let keypair = crypto_service
@@ -227,17 +232,31 @@ pub(crate) async fn save(
     cabinet.password = Some(password);
     crypto_service.delete_by_id(keypair.id.unwrap()).await?;
 
-    let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
     let cabinet_service =
         create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
-    let cabinet = cabinet_service.save(cabinet, items).await;
-    if let Err(e) = cabinet {
-        transaction.rollback().await?;
-        Err(e)
-    } else {
-        transaction.commit().await?;
-        Ok(Json(CabinetView::from(cabinet.unwrap())))
-    }
+    let cabinet = cabinet_service.save(cabinet, items).await?;
+    transaction.commit().await?;
+    Ok(Json(CabinetView::from(cabinet)))
+}
+
+/// Delete cabinet and items
+#[axum::debug_handler]
+pub(crate) async fn delete_cabinet(
+    State(state): State<ServerState>,
+    Path(cabinet_code): Path<i64>,
+    Json(credential): Json<CabinetCredential>,
+) -> Result<Json<bool>, DomainError> {
+    let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
+    let cabinet_service = create_cabinet_service(
+        state.connection.clone(),
+        &state.data_folder,
+        state.cabinet_number,
+    );
+
+    cabinet_service.delete_by_code(cabinet_code).await?;
+    transaction.commit().await?;
+    Ok(Json(true))
 }
 
 /// Get cabinet items
@@ -247,37 +266,19 @@ pub(crate) async fn items(
     Path(cabinet_code): Path<i64>,
     Json(credential): Json<CabinetCredential>,
 ) -> Result<Json<Vec<CabinetItem>>, DomainError> {
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
         state.cabinet_number,
     );
-    let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
-    if cabinet.is_none() {
-        return Err(CabinetError::NotFound)?;
-    }
-    let cabinet = cabinet.unwrap();
-
-    // Decrypt password
-    let crypto_service = create_sm2_crypto_service(state.connection);
-    let keypair = crypto_service
-        .get_effective_by_public_key(&credential.public_key)
-        .await?;
-    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
-    let password =
-        domain::service::crypto::decrypt_hex_to_plaintext(&secret_key, &credential.password)?;
-
-    // Validate password
-    if Some(password) != cabinet.password {
-        return Err(CabinetError::InvalidPassword)?;
-    }
     let items = cabinet_service
         .list_items_by_cabinet_code(cabinet_code)
         .await?;
     Ok(Json(items))
 }
 
-/// Get cabinet item
+/// Get cabinet item content
 #[axum::debug_handler]
 pub(crate) async fn get_item_content(
     State(state): State<ServerState>,
@@ -288,31 +289,9 @@ pub(crate) async fn get_item_content(
     use axum::body::Body;
     use axum::http::header::HeaderValue;
     use axum::response::Response;
-    let cabinet_service = create_cabinet_service(
-        state.connection.clone(),
-        &state.data_folder,
-        state.cabinet_number,
-    );
-    let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
-    if cabinet.is_none() {
-        return Err(CabinetError::NotFound)?;
-    }
-    let cabinet = cabinet.unwrap();
-
-    // Decrypt password
-    let crypto_service = create_sm2_crypto_service(state.connection);
-    let keypair = crypto_service
-        .get_effective_by_public_key(&credential.public_key)
-        .await?;
-    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
-    let password =
-        domain::service::crypto::decrypt_hex_to_plaintext(&secret_key, &credential.password)?;
-
-    // Validate password
-    if Some(password) != cabinet.password {
-        return Err(CabinetError::InvalidPassword)?;
-    }
-
+    let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
+    let cabinet_service =
+        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
     // Get item
     let item = cabinet_service
         .get_item_by_id(item_id, true)
@@ -348,6 +327,40 @@ pub(crate) async fn get_item_content(
         }
         _ => Err(CabinetError::ItemNotSupportMode(params.mode))?,
     }
+}
+
+/// Validate cabinet permission and return cabinet
+async fn validate_cabinet_permission(
+    state: &ServerState,
+    cabinet_code: i64,
+    credential: CabinetCredential,
+) -> Result<Cabinet, DomainError> {
+    let cabinet_service = create_cabinet_service(
+        state.connection.clone(),
+        &state.data_folder,
+        state.cabinet_number,
+    );
+    let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
+    if cabinet.is_none() {
+        return Err(CabinetError::NotFound)?;
+    }
+    let cabinet = cabinet.unwrap();
+
+    // Decrypt password
+    let crypto_service = create_sm2_crypto_service(state.connection.clone());
+    let keypair = crypto_service
+        .get_effective_by_public_key(&credential.public_key)
+        .await?;
+    crypto_service.delete_by_id(keypair.id.unwrap()).await?;
+    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
+    let password =
+        domain::service::crypto::decrypt_hex_to_plaintext(&secret_key, &credential.password)?;
+
+    // Validate password
+    if Some(password) != cabinet.password {
+        return Err(CabinetError::InvalidPassword)?;
+    }
+    Ok(cabinet)
 }
 
 /// Cabinet struct for view

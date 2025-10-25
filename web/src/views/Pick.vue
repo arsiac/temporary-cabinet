@@ -19,7 +19,7 @@
       <el-alert v-if="message" :title="message" type="info" :closable="false" class="result">
         <template #default>
           <div class="msg-line">
-            <el-button size="small" text @click="copyMsg">复制</el-button>
+            <el-button size="small" text @click="copyMessage">复制</el-button>
           </div>
         </template>
       </el-alert>
@@ -27,10 +27,14 @@
       <!-- 2. 文件列表 -->
       <div v-if="cabinetItems.length" class="result">
         <div class="file" v-for="item in cabinetItems" :key="item.id">
-          <el-icon><Document /></el-icon>
-          <span class="name">{{ item.name }}</span>
-          <!-- <span class="size">({{ formatSize(f.size) }})</span> -->
-          <el-button type="primary" link size="small" @click="download(item)"> 下载 </el-button>
+          <span class="file-item">
+            <el-icon><Document /></el-icon>
+            <span class="name">{{ item.name }}</span>
+          </span>
+          <span class="file-item">
+            <!-- <span class="size">({{ formatSize(f.size) }})</span> -->
+            <el-button type="primary" link size="small" @click="download(item)"> 下载 </el-button>
+          </span>
         </div>
       </div>
 
@@ -45,14 +49,16 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { Document } from '@element-plus/icons-vue';
 import PasswordInput from '@/components/PasswordInput.vue';
-import { getCabinetItems, getCabinetItemContent } from '@/api/cabinet';
+import { getCabinetItems, getCabinetItemContent, deleteCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
 
 const route = useRoute();
+const router = useRouter();
 const step = ref(1);
 const code = ref(route.query.c || '');
 const password = ref('');
@@ -77,6 +83,10 @@ async function openCabinet() {
       if (item.category === 'Text') {
         pk = await getPublicKey();
         encryptedPassword = sm2Encrypt(pk, password.value);
+        credential = {
+          password: encryptedPassword,
+          public_key: pk,
+        };
         message.value = await getCabinetItemContent(item.cabinet_code, item.id, 'text', credential);
       } else {
         cabinetItems.value.push(item);
@@ -87,6 +97,11 @@ async function openCabinet() {
   } catch (e) {
     ElMessage.error(e || '取件失败');
   }
+}
+
+function copyMessage() {
+  navigator.clipboard.writeText(message.value);
+  ElMessage.success('已复制');
 }
 
 async function download(item) {
@@ -118,14 +133,26 @@ function reset() {
 }
 
 async function clearCabinet() {
-  reset();
-  ElMessage.success('柜子已回收');
+  const pk = await getPublicKey();
+  let encryptedPassword = sm2Encrypt(pk, password.value);
+  let credential = {
+    password: encryptedPassword,
+    public_key: pk,
+  };
+  try {
+    await deleteCabinet(code.value, credential);
+    reset();
+    ElMessage.success('柜子已回收');
+    router.push('/');
+  } catch (e) {
+    ElMessage.error(e || '回收失败');
+  }
 }
 
 function toHome() {
   reset();
   ElMessage.success('已返回首页');
-  route.push('/');
+  router.push('/');
 }
 </script>
 
@@ -158,5 +185,12 @@ function toHome() {
   align-items: center;
   gap: 6px;
   margin: 12px 0;
+  justify-content: space-between;
+}
+
+.file .file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 </style>
