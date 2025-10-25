@@ -24,14 +24,19 @@
       </el-button>
     </template>
     <template v-if="step === 2">
-      <el-alert v-if="message" type="info" :closable="false" class="result msg-alert">
-        <template #default>
-          <div class="msg-line">
-            <span class="msg-text">{{ message }}</span>
-            <el-button size="small" text @click="copyMessage">{{ t('copy') }}</el-button>
-          </div>
-        </template>
-      </el-alert>
+      <div v-if="message" class="result msg-box">
+        <el-input
+          v-model="message"
+          type="textarea"
+          readonly
+          autosize
+          resize="none"
+          class="msg-textarea"
+        />
+        <el-button class="copy-btn" size="small" text @click="copyMessage">
+          {{ t('copy') }}
+        </el-button>
+      </div>
       <div v-if="cabinetItems.length" class="result file-panel">
         <div v-for="item in cabinetItems" :key="item.id" class="file-card">
           <div class="file-info">
@@ -43,9 +48,14 @@
         </div>
       </div>
       <div class="result">
-        <el-button type="danger" class="big-btn" @click="clearCabinet">
-          {{ t('cleanup-and-delete-cabinet') }}
-        </el-button>
+        <el-button-group class="big-btn">
+          <el-button type="primary" @click="copyMessage" text bg>
+            {{ t('copy') }}
+          </el-button>
+          <el-button type="danger" @click="clearCabinet">
+            {{ t('cleanup-and-delete-cabinet') }}
+          </el-button>
+        </el-button-group>
       </div>
     </template>
     <el-button link @click="toHome">← {{ t('back-to-home') }}</el-button>
@@ -55,13 +65,14 @@
 <script setup>
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { Document } from '@element-plus/icons-vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { getCabinetItems, getCabinetItemContent, deleteCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
-import { useI18n } from 'vue-i18n';
+import { copyToClipboard } from '@/utils';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -103,16 +114,9 @@ async function openCabinet() {
 }
 
 function copyMessage() {
-  if (navigator.clipboard) {
-    try {
-      navigator.clipboard.writeText(message.value);
-      ElMessage.success(t('copied'));
-    } catch (e) {
-      ElMessage.error(t('error:pickup-failed') + ' ' + e.message);
-    }
-  } else {
-    ElMessage.error(t('browser-not-support-copy'));
-  }
+  copyToClipboard(message.value)
+    .then(() => ElMessage.success(t('copied')))
+    .catch(() => ElMessage.error(t('browser-not-support-copy')));
 }
 
 async function download(item) {
@@ -227,7 +231,27 @@ function formatSize(size) {
   flex: 1;
   margin-right: 8px;
 }
-
+.msg-box {
+  position: relative;
+}
+.msg-textarea {
+  background: #f7f8fa;
+  border: none;
+  box-shadow: inset 0 0 0 1px #e5e7eb;
+}
+.copy-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  color: #909399;
+  background: #ffffffcc;
+  backdrop-filter: blur(2px);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.copy-btn:hover {
+  color: #00c389;
+}
 /* 文件卡片 */
 .file-panel {
   margin-top: 12px;

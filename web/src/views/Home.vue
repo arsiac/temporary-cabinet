@@ -119,15 +119,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, inject } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { Warning, UploadFilled } from '@element-plus/icons-vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { getCabinetsUsage, applyCabinet, saveCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
-import { inject } from 'vue';
-import { useI18n } from 'vue-i18n';
+import { copyToClipboard } from '@/utils';
 
 const { t } = useI18n();
 const dayjs = inject('dayjs');
@@ -219,16 +219,9 @@ async function lockCabinet() {
 function share() {
   const url = `${location.origin}/pick?c=${cabinet.value.code}`;
   const text = t('cabinet:link-info', { code: cabinet.value.code, link: url });
-  if (navigator.clipboard) {
-    try {
-      navigator.clipboard.writeText(text);
-      ElMessage.success(t('copied'));
-    } catch (e) {
-      ElMessage.error(t('error:pickup-failed') + ' ' + e.message);
-    }
-  } else {
-    ElMessage.error(t('browser-not-support-copy'));
-  }
+  copyToClipboard(text)
+    .then(() => ElMessage.success(t('copied')))
+    .catch(() => ElMessage.error(t('browser-not-support-copy')));
 }
 
 function reset() {

@@ -17,6 +17,5 @@ body,
   align-items: center;
   justify-content: center;
   background: #f5f7fa;
-  padding: 24px;
 }
 </style>
