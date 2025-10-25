@@ -32,8 +32,16 @@
 
       <div class="label">存一些消息</div>
 
-      <el-input v-model="text" type="textarea" :rows="4" placeholder="贴一段文字…" class="txt" />
-      <div class="label">或者放一些文件</div>
+      <el-input
+        v-model="text"
+        type="textarea"
+        :rows="4"
+        placeholder="贴一段文字…"
+        class="txt"
+        maxlength="500"
+        show-word-limit
+      />
+      <div class="label">也可以放一些文件</div>
 
       <!-- 多文件上传 -->
       <el-upload drag multiple :auto-upload="false" :on-change="onUploadChange">
