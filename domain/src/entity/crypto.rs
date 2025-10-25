@@ -1,7 +1,6 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CryptoKeypair {
     pub id: Option<uuid::Uuid>,
     pub secret_key: String,

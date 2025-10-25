@@ -8,5 +8,6 @@ import { sm2 } from 'sm-crypto';
  * @returns {string} - Encrypted message in hex
  */
 export function sm2Encrypt(publicKeyHex, message) {
-  return sm2.doEncrypt(message, publicKeyHex, 1);
+  let encrypted = sm2.doEncrypt(message, publicKeyHex, 1);
+  return '04' + encrypted;
 }

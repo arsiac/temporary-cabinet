@@ -1,12 +1,11 @@
 use crate::ServerState;
-use axum::extract::{Json, Path, State};
+use axum::extract::{Json, Path, Query, State};
 use chrono::{DateTime, Local};
 use domain::entity::cabinet::{
     Cabinet, CabinetItem, CabinetItemCategory, CabinetStatus, CabinetUsage,
 };
 use domain::error::DomainError;
 use domain::error::cabinet::CabinetError;
-use domain::error::crypto::CryptoError;
 use infrastructure::service::cabinet::create_cabinet_service;
 use infrastructure::service::crypto::create_sm2_crypto_service;
 
@@ -17,7 +16,11 @@ pub(crate) fn router() -> axum::Router<ServerState> {
         .route("/apply", post(apply))
         .route("/usage", get(usage))
         .route("/{cabinet_code}", get(get_by_code).post(save))
-        .route("/{cabinet_code}/items", get(items))
+        .route("/{cabinet_code}/items", post(items))
+        .route(
+            "/{cabinet_code}/item/{item_id}/content",
+            post(get_item_content),
+        )
 }
 
 /// Apply for a cabinet
@@ -26,7 +29,7 @@ pub(crate) async fn apply(
     State(state): State<ServerState>,
 ) -> Result<Json<CabinetView>, DomainError> {
     let service =
-        create_cabinet_service(&state.connection, &state.data_folder, state.cabinet_number);
+        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
     let cabinet = service.apply().await?;
     Ok(Json(CabinetView::from(cabinet)))
 }
@@ -37,7 +40,7 @@ pub(crate) async fn usage(
     State(state): State<ServerState>,
 ) -> Result<Json<CabinetUsage>, DomainError> {
     let service =
-        create_cabinet_service(&state.connection, &state.data_folder, state.cabinet_number);
+        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
     let status = service.usage().await?;
     Ok(Json(status))
 }
@@ -48,9 +51,12 @@ pub(crate) async fn get_by_code(
     Path(cabinet_code): Path<i64>,
 ) -> Result<Json<CabinetView>, DomainError> {
     let service =
-        create_cabinet_service(&state.connection, &state.data_folder, state.cabinet_number);
+        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
     let cabinet = service.get_by_code(cabinet_code).await?;
-    Ok(Json(CabinetView::from(cabinet)))
+    if cabinet.is_none() {
+        return Err(CabinetError::NotFound)?;
+    }
+    Ok(Json(CabinetView::from(cabinet.unwrap())))
 }
 
 #[axum::debug_handler]
@@ -58,7 +64,7 @@ pub(crate) async fn save(
     State(state): State<ServerState>,
     Path(cabinet_code): Path<i64>,
     mut multipart: axum::extract::Multipart,
-) -> Result<(), DomainError> {
+) -> Result<Json<CabinetView>, DomainError> {
     const MAX_MSG_SIZE: usize = 2000;
     const MAX_FILE_SIZE: usize = 2 * 1024 * 1024;
     const MAX_TOTAL_SIZE: usize = 10 * 1024 * 1024;
@@ -68,36 +74,48 @@ pub(crate) async fn save(
     let mut items = Vec::new();
     let mut order = 1;
     let mut total_size = 0;
-    while let Ok(Some(mut field)) = multipart.next_field().await {
-        if field.name() == Some("password") {
-            match field.text().await {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => {
+                log::error!("Failed to read multipart field: {e:?}");
+                return Err(DomainError::InternalError);
+            }
+        };
+
+        let field_name = field.name();
+        if field_name.is_none() {
+            continue;
+        }
+        let field_name = field_name.unwrap().to_string();
+        log::debug!(
+            "Cabinet '{cabinet_code}' save with field '{field_name}'."
+        );
+        match field_name.as_str() {
+            "password" => match field.text().await {
                 Ok(password) => {
                     cabinet.password = Some(password);
                 }
                 Err(e) => {
-                    log::error!("Failed to read password: {:?}", e);
+                    log::error!("Failed to read password: {e:?}");
                     return Err(DomainError::InternalError);
                 }
-            }
-            continue;
-        }
-        if field.name() == Some("pk") {
-            match field.text().await {
+            },
+            "public_key" => match field.text().await {
                 Ok(pk) => {
                     public_key = Some(pk);
                 }
                 Err(e) => {
-                    log::error!("Failed to read pk: {:?}", e);
+                    log::error!("Failed to read pk: {e:?}");
                     return Err(DomainError::InternalError);
                 }
-            }
-            continue;
-        }
-        if field.name() == Some("hours") {
-            match field.text().await {
+            },
+
+            "hours" => match field.text().await {
                 Ok(text) => {
                     let hour = text.parse::<i32>().map_err(|e| {
-                        log::error!("Failed to read hours: {:?}", e);
+                        log::error!("Failed to read hours: {e:?}");
                         CabinetError::InvalidNumberString(text)
                     })?;
                     if !(0..=24).contains(&hour) {
@@ -106,58 +124,52 @@ pub(crate) async fn save(
                     cabinet.expire_at = Some(Local::now() + chrono::Duration::hours(hour as i64));
                 }
                 Err(e) => {
-                    log::error!("Failed to read hours: {:?}", e);
+                    log::error!("Failed to read hours: {e:?}");
                     return Err(DomainError::InternalError);
                 }
-            }
-            continue;
-        }
-        if field.name() == Some("hold_token") {
-            match field.text().await {
+            },
+            "hold_token" => match field.text().await {
                 Ok(text) => {
                     cabinet.hold_token = Some(text);
                 }
                 Err(e) => {
-                    log::error!("Failed to read hold_token: {:?}", e);
+                    log::error!("Failed to read hold_token: {e:?}");
                     return Err(DomainError::InternalError);
                 }
+            },
+            "message" => {
+                let bytes = field.text().await.unwrap().into_bytes();
+                let text_size = bytes.len();
+                if text_size > MAX_MSG_SIZE {
+                    return Err(CabinetError::InvalidTextSize(text_size))?;
+                }
+
+                let text_item = CabinetItem::new(
+                    cabinet_code * 10 + order,
+                    cabinet_code,
+                    CabinetItemCategory::Text,
+                    String::from("message.txt"),
+                    Some(bytes),
+                    order as i32,
+                );
+                log::debug!(
+                    "Cabinet '{}' add message item '{}' ({}).",
+                    cabinet_code,
+                    &text_item.name,
+                    text_size
+                );
+                items.push(text_item);
+                order += 1;
+                total_size += text_size;
             }
-            continue;
-        }
-        if field.name() == Some("message") {
-            let bytes = field.text().await.unwrap().into_bytes();
-            let text_size = bytes.len();
-            if text_size > MAX_MSG_SIZE {
-                return Err(CabinetError::InvalidTextSize(text_size))?;
-            }
-
-            let text_item = CabinetItem::new(
-                cabinet_code * 10 + order,
-                cabinet_code,
-                CabinetItemCategory::Text,
-                String::from("message.txt"),
-                Some(bytes),
-                order as i32,
-            );
-            items.push(text_item);
-            order += 1;
-            total_size += text_size;
-            continue;
-        }
-
-        if field.name() == Some("files") {
-            let Some(filename) = field.file_name() else {
-                continue;
-            };
-
-            let filename = filename.rsplit('/').next().unwrap_or("unknown");
-            let filename = filename.to_string();
-            let bytes = field.chunk().await.map_err(|e| {
-                log::error!("Failed to read chunk of file '{}': {:?}", filename, e);
-                DomainError::InternalError
-            })?;
-
-            if let Some(bytes) = bytes {
+            "files" => {
+                let filename = field.file_name().unwrap_or("unknown");
+                let filename = filename.rsplit('/').next().unwrap_or("unknown");
+                let filename = filename.to_string();
+                let bytes = field.bytes().await.map_err(|e| {
+                    log::error!("Failed to read file '{filename}': {e:?}");
+                    DomainError::InternalError
+                })?;
                 let file_size = bytes.len();
                 if file_size > MAX_FILE_SIZE {
                     return Err(CabinetError::InvalidFileSize(filename, file_size))?;
@@ -170,9 +182,18 @@ pub(crate) async fn save(
                     Some(bytes.to_vec()),
                     order as i32,
                 );
+                log::debug!(
+                    "Cabinet '{}' add file item '{}' ({}).",
+                    cabinet_code,
+                    &file_item.name,
+                    file_size
+                );
                 items.push(file_item);
                 order += 1;
                 total_size += file_size;
+            }
+            _ => {
+                log::warn!("Unknown field: {field_name}");
             }
         }
     }
@@ -195,39 +216,28 @@ pub(crate) async fn save(
     }
     let public_key = public_key.unwrap();
     let crypto_service = create_sm2_crypto_service(state.connection.clone());
-    let keypair = crypto_service.get_by_public_key(&public_key).await?;
-    if keypair.is_none() {
-        return Err(CryptoError::NotFound)?;
-    }
-    let keypair = keypair.unwrap();
-    if keypair.expire_at < Local::now() {
-        log::error!(
-            "Keypair with public key '{}' has expired at {}",
-            public_key,
-            keypair.expire_at
-        );
-        return Err(CryptoError::KeypairExpired)?;
-    }
+    let keypair = crypto_service
+        .get_effective_by_public_key(&public_key)
+        .await?;
     let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
-    let encrypted_bytes = domain::service::crypto::hex2bytes(cabinet.password.as_ref().unwrap())?;
-    let password_bytes = domain::service::crypto::decrypt(&secret_key, &encrypted_bytes)?;
-    let password = String::from_utf8(password_bytes).map_err(|e| {
-        log::error!("Failed to convert password bytes to utf-8 string: {}", e);
-        DomainError::InternalError
-    })?;
+    let password = domain::service::crypto::decrypt_hex_to_plaintext(
+        &secret_key,
+        cabinet.password.as_ref().unwrap(),
+    )?;
     cabinet.password = Some(password);
     crypto_service.delete_by_id(keypair.id.unwrap()).await?;
 
     let transaction = infrastructure::database::begin_transaction(&state.connection).await?;
-    let service =
-        create_cabinet_service(&state.connection, &state.data_folder, state.cabinet_number);
-    if let Err(e) = service.save(cabinet, items).await {
+    let cabinet_service =
+        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let cabinet = cabinet_service.save(cabinet, items).await;
+    if let Err(e) = cabinet {
         transaction.rollback().await?;
-        return Err(e);
+        Err(e)
     } else {
         transaction.commit().await?;
+        Ok(Json(CabinetView::from(cabinet.unwrap())))
     }
-    Ok(())
 }
 
 /// Get cabinet items
@@ -235,15 +245,113 @@ pub(crate) async fn save(
 pub(crate) async fn items(
     State(state): State<ServerState>,
     Path(cabinet_code): Path<i64>,
+    Json(credential): Json<CabinetCredential>,
 ) -> Result<Json<Vec<CabinetItem>>, DomainError> {
-    let service =
-        create_cabinet_service(&state.connection, &state.data_folder, state.cabinet_number);
-    let items = service.list_items_by_cabinet_code(cabinet_code).await?;
+    let cabinet_service = create_cabinet_service(
+        state.connection.clone(),
+        &state.data_folder,
+        state.cabinet_number,
+    );
+    let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
+    if cabinet.is_none() {
+        return Err(CabinetError::NotFound)?;
+    }
+    let cabinet = cabinet.unwrap();
+
+    // Decrypt password
+    let crypto_service = create_sm2_crypto_service(state.connection);
+    let keypair = crypto_service
+        .get_effective_by_public_key(&credential.public_key)
+        .await?;
+    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
+    let password =
+        domain::service::crypto::decrypt_hex_to_plaintext(&secret_key, &credential.password)?;
+
+    // Validate password
+    if Some(password) != cabinet.password {
+        return Err(CabinetError::InvalidPassword)?;
+    }
+    let items = cabinet_service
+        .list_items_by_cabinet_code(cabinet_code)
+        .await?;
     Ok(Json(items))
 }
 
+/// Get cabinet item
+#[axum::debug_handler]
+pub(crate) async fn get_item_content(
+    State(state): State<ServerState>,
+    Path((cabinet_code, item_id)): Path<(i64, i64)>,
+    Query(params): Query<CabinetItemContentParams>,
+    Json(credential): Json<CabinetCredential>,
+) -> Result<axum::response::Response, DomainError> {
+    use axum::body::Body;
+    use axum::http::header::HeaderValue;
+    use axum::response::Response;
+    let cabinet_service = create_cabinet_service(
+        state.connection.clone(),
+        &state.data_folder,
+        state.cabinet_number,
+    );
+    let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
+    if cabinet.is_none() {
+        return Err(CabinetError::NotFound)?;
+    }
+    let cabinet = cabinet.unwrap();
+
+    // Decrypt password
+    let crypto_service = create_sm2_crypto_service(state.connection);
+    let keypair = crypto_service
+        .get_effective_by_public_key(&credential.public_key)
+        .await?;
+    let secret_key = domain::service::crypto::hex2sk(&keypair.secret_key)?;
+    let password =
+        domain::service::crypto::decrypt_hex_to_plaintext(&secret_key, &credential.password)?;
+
+    // Validate password
+    if Some(password) != cabinet.password {
+        return Err(CabinetError::InvalidPassword)?;
+    }
+
+    // Get item
+    let item = cabinet_service
+        .get_item_by_id(item_id, true)
+        .await?
+        .ok_or(CabinetError::NotFound)?;
+    match params.mode.as_str() {
+        "text" => {
+            if item.category != CabinetItemCategory::Text {
+                return Err(CabinetError::ItemNotSupportMode(params.mode))?;
+            }
+            let content = item.content.ok_or(CabinetError::InvalidItemContent)?;
+            Ok(Response::builder()
+                .header(
+                    axum::http::header::CONTENT_TYPE,
+                    HeaderValue::from_static("text/plain"),
+                )
+                .body(Body::from(content))
+                .unwrap())
+        }
+        "file" => {
+            let content = item.content.ok_or(CabinetError::InvalidItemContent)?;
+            Ok(Response::builder()
+                .header(
+                    axum::http::header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/octet-stream"),
+                )
+                .header(
+                    axum::http::header::CONTENT_DISPOSITION,
+                    format!("attachment; filename={}", item.name),
+                )
+                .body(Body::from(content))
+                .unwrap())
+        }
+        _ => Err(CabinetError::ItemNotSupportMode(params.mode))?,
+    }
+}
+
 /// Cabinet struct for view
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize)]
 pub struct CabinetView {
     pub code: i64,
     pub name: Option<String>,
@@ -264,4 +372,15 @@ impl From<Cabinet> for CabinetView {
             expire_at: value.expire_at,
         }
     }
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct CabinetCredential {
+    pub public_key: String,
+    pub password: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct CabinetItemContentParams {
+    pub mode: String,
 }

@@ -17,6 +17,9 @@ pub enum CabinetError {
     HoldTokenRequired,
     PublicKeyRequired,
     NotYourHoldCabinet(i64),
+    InvalidPassword,
+    InvalidItemContent,
+    ItemNotSupportMode(String),
 }
 
 impl From<CabinetError> for super::DomainError {

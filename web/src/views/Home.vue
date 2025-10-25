@@ -36,7 +36,7 @@
       <div class="label">或者放一些文件</div>
 
       <!-- 多文件上传 -->
-      <el-upload drag multiple :auto-upload="false" :on-change="uploadChange">
+      <el-upload drag multiple :auto-upload="false" :on-change="onUploadChange">
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="el-upload__text">拖拽或点击上传文件</div>
         <template #tip>
@@ -60,15 +60,7 @@
     <template v-if="step === 2">
       <div class="step-dot">2 / 4</div>
       <div class="title">锁柜</div>
-      <el-input
-        v-model="pwd"
-        type="password"
-        placeholder="输入 4-20 位密码"
-        minlength="4"
-        maxlength="20"
-        show-password
-        class="inp"
-      />
+      <password-input v-model="pwd" placeholder="输入 4-20 位密码" class="inp" />
       <el-input
         v-model.number="hours"
         type="number"
@@ -88,7 +80,16 @@
       >
         锁柜并取走编号
       </el-button>
-      <el-button link @click="step = 1">← 返回</el-button>
+      <el-button
+        link
+        @click="
+          () => {
+            files = [];
+            step = 1;
+          }
+        "
+        >← 返回</el-button
+      >
     </template>
 
     <!-- 屏3 完成 -->
@@ -114,12 +115,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { getCabinetsUsage, applyCabinet, saveCabinet, getCabinetByCode } from '@/api/cabinet';
+import PasswordInput from '@/components/PasswordInput.vue';
+import { getCabinetsUsage, applyCabinet, saveCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
 import { inject } from 'vue';
 const dayjs = inject('dayjs');
-
 const step = ref(0);
 const stats = ref({ total: 0, used: 0, free: 0 });
 const text = ref('');
@@ -148,27 +149,54 @@ async function apply() {
 }
 
 function toLock() {
+  for (let file in files.value) {
+    if (!checkFileSize(file)) {
+      return;
+    }
+  }
+  if (!checkFilesSize(files.value)) {
+    return;
+  }
   step.value = 2;
 }
 
-function uploadChange(_uploadFile, uploadFiles) {
+function checkFileSize(uploadFile) {
+  if (uploadFile.size > 2 * 1024 * 1024) {
+    const fileSize = uploadFile.size / 1024 / 1024;
+    ElMessage.error(`文件 '${uploadFile.name}' 大小超过 2MB (${fileSize.toFixed(2)}MB)`);
+    return false;
+  }
+  return true;
+}
+
+function checkFilesSize(uploadFiles) {
+  let totalSize = uploadFiles.reduce((acc, f) => acc + f.size, 0);
+  if (totalSize > 10 * 1024 * 1024) {
+    const totalFileSize = totalSize / 1024 / 1024;
+    ElMessage.error(`文件总大小超过 10MB (${totalFileSize.toFixed(2)}MB)`);
+    return false;
+  }
+  return true;
+}
+
+function onUploadChange(uploadFile, uploadFiles) {
+  checkFileSize(uploadFile);
+  checkFilesSize(uploadFiles);
   files.value = uploadFiles;
 }
 
 async function lockCabinet() {
   const pk = await getPublicKey();
   let encryptedPassword = sm2Encrypt(pk, pwd.value);
-
   try {
     const form = new FormData();
     form.set('hold_token', cabinet.value.hold_token);
     form.set('hours', hours.value);
-    form.set('pk', pk);
-    form.append('password', `04${encryptedPassword}`);
+    form.set('public_key', pk);
+    form.append('password', encryptedPassword);
     form.append('message', text.value);
     files.value.forEach((f) => form.append('files', f.raw));
-    await saveCabinet(cabinet.value.code, form);
-    cabinet.value = await getCabinetByCode(cabinet.value.code);
+    cabinet.value = await saveCabinet(cabinet.value.code, form);
     step.value = 3;
   } catch (e) {
     ElMessage.error(e || '锁柜失败，请重试');

@@ -13,7 +13,7 @@ pub(crate) fn initialize_logger(debug: bool) {
         .with_local_timestamps()
         .init();
     if let Err(e) = result {
-        eprintln!("Failed to initialize logger: {}", e);
+        eprintln!("Failed to initialize logger: {e}");
     }
 }
 
@@ -25,7 +25,7 @@ pub(crate) fn initialize_data_folder(data_folder: Option<String>) -> std::path::
         None => {
             let exe_path = std::env::current_exe();
             if let Err(e) = exe_path {
-                eprintln!("Failed to get executable path: {}", e);
+                eprintln!("Failed to get executable path: {e}");
                 std::process::exit(1);
             }
             let exe_path = exe_path.unwrap();
@@ -42,7 +42,7 @@ pub(crate) fn initialize_data_folder(data_folder: Option<String>) -> std::path::
     if !path.exists()
         && let Err(e) = std::fs::create_dir_all(&path)
     {
-        eprintln!("Failed to create data directory: {}", e);
+        eprintln!("Failed to create data directory: {e}");
         std::process::exit(1);
     }
 
@@ -69,7 +69,7 @@ pub(crate) async fn initialize_database(
     log::debug!("Connecting to database '{}'...", database_file.display());
     let connection = Database::connect(connect_opts).await;
     if let Err(e) = connection {
-        eprintln!("Failed to connect to database: {}", e);
+        eprintln!("Failed to connect to database: {e}");
         std::process::exit(1);
     }
     let connection = connection.unwrap();
@@ -77,7 +77,7 @@ pub(crate) async fn initialize_database(
     log::debug!("Migrating database...");
     let migrate_result = Migrator::up(&connection, None).await;
     if let Err(e) = migrate_result {
-        eprintln!("Failed to migrate database: {}", e);
+        eprintln!("Failed to migrate database: {e}");
         std::process::exit(1);
     }
     connection

@@ -29,7 +29,7 @@ impl CabinetItemRepository {
         if !folder_path.exists()
             && let Err(e) = std::fs::create_dir_all(&folder_path)
         {
-            log::error!("Failed to create folder '{:?}': {}", folder_path, e);
+            log::error!("Failed to create folder '{folder_path:?}': {e}");
             return PathBuf::new();
         }
         folder_path.join(cabinet_item_id.to_string())
@@ -38,7 +38,7 @@ impl CabinetItemRepository {
     /// Write content to filesystem
     fn write_content(&self, path: &Path, content: &[u8]) -> Result<(), DomainError> {
         if let Err(e) = std::fs::write(path, content) {
-            log::error!("Failed to write cabinet content to '{:?}': {}", path, e);
+            log::error!("Failed to write cabinet content to '{path:?}': {e}");
             return Err(DomainError::InternalError);
         }
         Ok(())
@@ -48,7 +48,7 @@ impl CabinetItemRepository {
     fn read_content(&self, path: &Path) -> Result<Vec<u8>, DomainError> {
         let content = std::fs::read(path);
         if let Err(e) = content {
-            log::error!("Failed to read cabinet content from '{:?}': {}", path, e);
+            log::error!("Failed to read cabinet content from '{path:?}': {e}");
             return Err(DomainError::InternalError);
         }
         Ok(content.unwrap())
@@ -56,7 +56,7 @@ impl CabinetItemRepository {
 
     fn remove_file(&self, path: &Path) -> Result<(), DomainError> {
         if let Err(e) = std::fs::remove_file(path) {
-            log::error!("Failed to remove file '{:?}': {}", path, e);
+            log::error!("Failed to remove file '{path:?}': {e}");
             return Err(DomainError::InternalError);
         }
         Ok(())
@@ -88,7 +88,7 @@ impl Repository for CabinetItemRepository {
         model.path = Some(path.to_string_lossy().to_string());
         let active_model = ActiveModel::from(model);
         active_model.insert(&self.connection).await.map_err(|e| {
-            log::error!("Failed to save cabinet item: {}", e);
+            log::error!("Failed to save cabinet item: {e}");
             DomainError::InternalError
         })?;
         Ok(())
@@ -115,7 +115,7 @@ impl Repository for CabinetItemRepository {
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete cabinet item '{}': {}", id, e);
+                log::error!("Failed to delete cabinet item '{id}': {e}");
                 DomainError::InternalError
             })?;
         Ok(())
@@ -151,7 +151,7 @@ impl Repository for CabinetItemRepository {
             .all(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to list cabinet items: {}", e);
+                log::error!("Failed to list cabinet items: {e}");
                 DomainError::InternalError
             })?;
         let mut cabinet_items = Vec::with_capacity(models.len());
@@ -169,7 +169,7 @@ impl CabinetItemRepository {
             .one(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to find cabinet item '{}': {}", id, e);
+                log::error!("Failed to find cabinet item '{id}': {e}");
                 DomainError::InternalError
             })
     }

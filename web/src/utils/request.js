@@ -10,6 +10,12 @@ const request = axios.create({
 request.interceptors.response.use(
   (response) => {
     if (response.status === 200) {
+      if (response.request.responseType === 'blob') {
+        return {
+          filename: response.headers['content-disposition'].split('filename=')[1],
+          data: response.data,
+        };
+      }
       return response.data;
     }
     const { message } = response.data;

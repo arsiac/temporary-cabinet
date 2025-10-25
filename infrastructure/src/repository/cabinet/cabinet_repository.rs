@@ -21,7 +21,7 @@ impl Repository for CabinetRepository {
         let model = Model::from(cabinet);
         let active_model = ActiveModel::from(model);
         let model = active_model.insert(&self.connection).await.map_err(|e| {
-            log::error!("Failed to insert cabinet: {}", e);
+            log::error!("Failed to insert cabinet: {e}");
             DomainError::InternalError
         })?;
         Ok(Cabinet::try_from(model)?)
@@ -32,7 +32,7 @@ impl Repository for CabinetRepository {
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete cabinet: {}", e);
+                log::error!("Failed to delete cabinet: {e}");
                 DomainError::InternalError
             })?;
         Ok(())
@@ -44,7 +44,7 @@ impl Repository for CabinetRepository {
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete expired cabinets: {}", e);
+                log::error!("Failed to delete expired cabinets: {e}");
                 DomainError::InternalError
             })?;
         Ok(res.rows_affected)
@@ -64,7 +64,7 @@ impl Repository for CabinetRepository {
         active_model.update_at = ActiveValue::Set(model.update_at);
         active_model.version = ActiveValue::Set(model.version + 1);
         active_model.update(&self.connection).await.map_err(|e| {
-            log::error!("Failed to update cabinet: {}", e);
+            log::error!("Failed to update cabinet: {e}");
             DomainError::InternalError
         })?;
         Ok(())
@@ -72,7 +72,7 @@ impl Repository for CabinetRepository {
 
     async fn count(&self) -> Result<u64, DomainError> {
         Entity::find().count(&self.connection).await.map_err(|e| {
-            log::error!("Failed to count cabinet: {}", e);
+            log::error!("Failed to count cabinet: {e}");
             DomainError::InternalError
         })
     }
@@ -83,7 +83,7 @@ impl Repository for CabinetRepository {
             .count(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to count cabinet: {}", e);
+                log::error!("Failed to count cabinet: {e}");
                 DomainError::InternalError
             })
     }
@@ -94,7 +94,7 @@ impl Repository for CabinetRepository {
             .count(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to check existence of cabinet: {}", e);
+                log::error!("Failed to check existence of cabinet: {e}");
                 DomainError::InternalError
             })?;
         Ok(count > 0)
@@ -105,7 +105,7 @@ impl Repository for CabinetRepository {
             .one(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to find cabinet: {}", e);
+                log::error!("Failed to find cabinet: {e}");
                 DomainError::InternalError
             })?
             .map(Cabinet::try_from)

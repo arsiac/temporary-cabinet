@@ -21,7 +21,7 @@ impl Repository for CryptoKeypairRepository {
         let model: Model = keypair.into();
         let active_model: ActiveModel = model.into();
         let res = active_model.insert(&self.connection).await.map_err(|e| {
-            log::error!("Failed to save keypair: {}", e);
+            log::error!("Failed to save keypair: {e}");
             DomainError::InternalError
         })?;
         Ok(res.into())
@@ -32,7 +32,7 @@ impl Repository for CryptoKeypairRepository {
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete keypair by id {}: {}", id, e);
+                log::error!("Failed to delete keypair by id {id}: {e}");
                 DomainError::InternalError
             })?;
         Ok(())
@@ -44,7 +44,7 @@ impl Repository for CryptoKeypairRepository {
             .exec(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete expired keypairs: {}", e);
+                log::error!("Failed to delete expired keypairs: {e}");
                 DomainError::InternalError
             })?;
         Ok(result.rows_affected)
@@ -59,7 +59,7 @@ impl Repository for CryptoKeypairRepository {
             .one(&self.connection)
             .await
             .map_err(|e| {
-                log::error!("Failed to find keypair by public key {}: {}", public_key, e);
+                log::error!("Failed to find keypair by public key {public_key}: {e}");
                 DomainError::InternalError
             })?;
         Ok(result.map(|model| model.into()))

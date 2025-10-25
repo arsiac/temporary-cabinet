@@ -54,7 +54,7 @@ fn install_node_modules() {
             }
         }
         Err(e) => {
-            eprintln!("cargo:error=Failed to execute pnpm install: {}", e);
+            eprintln!("cargo:error=Failed to execute pnpm install: {e}");
             std::process::exit(1);
         }
     }
@@ -74,7 +74,7 @@ fn build() {
             }
         }
         Err(e) => {
-            eprintln!("cargo:error=Failed to execute pnpm build: {}", e);
+            eprintln!("cargo:error=Failed to execute pnpm build: {e}");
             std::process::exit(1);
         }
     }

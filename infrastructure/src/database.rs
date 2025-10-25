@@ -7,7 +7,7 @@ pub async fn begin_transaction(
 ) -> Result<DatabaseTransactionWrapper, DomainError> {
     let transaction = connection.begin().await;
     if let Err(e) = transaction {
-        log::error!("Failed to begin transaction: {}", e);
+        log::error!("Failed to begin transaction: {e}");
         return Err(DomainError::InternalError);
     }
     Ok(DatabaseTransactionWrapper::new(transaction.unwrap()))
@@ -27,7 +27,7 @@ impl DatabaseTransactionWrapper {
     /// Rollback a database transaction
     pub async fn rollback(self) -> Result<(), DomainError> {
         if let Err(e) = self.transaction.rollback().await {
-            log::error!("Failed to rollback transaction: {}", e);
+            log::error!("Failed to rollback transaction: {e}");
             return Err(DomainError::InternalError);
         }
         Ok(())
@@ -36,7 +36,7 @@ impl DatabaseTransactionWrapper {
     /// Commit a database transaction
     pub async fn commit(self) -> Result<(), DomainError> {
         if let Err(e) = self.transaction.commit().await {
-            log::error!("Failed to commit transaction: {}", e);
+            log::error!("Failed to commit transaction: {e}");
             return Err(DomainError::InternalError);
         }
         Ok(())

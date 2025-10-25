@@ -24,6 +24,7 @@ async fn main() {
 
 /// Merge front-end and back-end routes and configure middleware
 fn router(state: api::ServerState) -> axum::Router {
+    use axum::extract::DefaultBodyLimit;
     use tower_http::{compression::CompressionLayer, decompression::RequestDecompressionLayer};
 
     let static_service = axum_embed::ServeEmbed::<web::WebAssets>::with_parameters(
@@ -39,4 +40,5 @@ fn router(state: api::ServerState) -> axum::Router {
                 .layer(RequestDecompressionLayer::new())
                 .layer(CompressionLayer::new()),
         )
+        .layer(DefaultBodyLimit::max(20 * 1024 * 1024))
 }
