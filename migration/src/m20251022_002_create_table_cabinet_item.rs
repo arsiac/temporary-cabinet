@@ -15,7 +15,8 @@ impl MigrationTrait for Migration {
                     .col(big_integer(CabinetItem::CabinetCode))
                     .col(string_len(CabinetItem::Category, 20))
                     .col(string_len(CabinetItem::Name, 200))
-                    .col(string_len_null(CabinetItem::Path, 1000))
+                    .col(string_len(CabinetItem::Path, 1000))
+                    .col(big_integer(CabinetItem::Size))
                     .col(integer(CabinetItem::SortOrder))
                     .col(date_time(CabinetItem::CreateAt))
                     .col(date_time(CabinetItem::UpdateAt))
@@ -50,6 +51,7 @@ enum CabinetItem {
     Category,
     Name,
     Path,
+    Size,
     SortOrder,
     CreateAt,
     UpdateAt,

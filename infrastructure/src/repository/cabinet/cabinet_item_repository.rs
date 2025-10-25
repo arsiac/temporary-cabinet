@@ -85,7 +85,7 @@ impl Repository for CabinetItemRepository {
 
         // Save cabinet item to database
         let mut model = Model::try_from(item)?;
-        model.path = Some(path.to_string_lossy().to_string());
+        model.path = path.to_string_lossy().to_string();
         let active_model = ActiveModel::from(model);
         active_model.insert(&self.connection).await.map_err(|e| {
             log::error!("Failed to save cabinet item: {e}");
@@ -102,7 +102,7 @@ impl Repository for CabinetItemRepository {
         let item = item.unwrap();
         let item_category = CabinetItemCategory::from_str(&item.category)?;
         if item_category == CabinetItemCategory::File {
-            let path = PathBuf::from(item.path.as_ref().unwrap());
+            let path = PathBuf::from(&item.path);
             log::debug!(
                 "Removing cabinet '{}' item '{}' content from '{:?}'",
                 item.cabinet_code,
@@ -132,7 +132,7 @@ impl Repository for CabinetItemRepository {
         }
         let model = model.unwrap();
 
-        let path = PathBuf::from(model.path.as_ref().unwrap());
+        let path = PathBuf::from(&model.path);
         let mut cabinet_item = CabinetItem::try_from(model)?;
         if with_content {
             let content = self.read_content(&path)?;
@@ -185,6 +185,7 @@ impl TryFrom<Model> for CabinetItem {
             name: value.name,
             category: CabinetItemCategory::from_str(&value.category)?,
             content: None,
+            size: value.size,
             sort_order: value.sort_order,
         })
     }
@@ -199,7 +200,8 @@ impl TryFrom<CabinetItem> for Model {
             cabinet_code: value.cabinet_code,
             category: value.category.to_string(),
             name: value.name,
-            path: None,
+            path: String::from(""),
+            size: value.size,
             sort_order: value.sort_order,
             create_at: now,
             update_at: now,

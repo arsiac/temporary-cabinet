@@ -116,6 +116,7 @@ pub struct CabinetItem {
     pub category: CabinetItemCategory,
     pub name: String,
     pub content: Option<Vec<u8>>,
+    pub size: i64,
     pub sort_order: i32,
 }
 
@@ -125,7 +126,7 @@ impl CabinetItem {
         cabinet_code: i64,
         category: CabinetItemCategory,
         name: String,
-        content: Option<Vec<u8>>,
+        content: Vec<u8>,
         sort_order: i32,
     ) -> Self {
         CabinetItem {
@@ -133,7 +134,8 @@ impl CabinetItem {
             cabinet_code,
             category,
             name,
-            content,
+            size: content.len() as i64,
+            content: Some(content),
             sort_order,
         }
     }

@@ -16,25 +16,24 @@
     </template>
     <template v-if="step === 2">
       <!-- 1. 文本消息 -->
-      <el-alert v-if="message" :title="message" type="info" :closable="false" class="result">
+      <el-alert v-if="message" type="info" :closable="false" class="result msg-alert">
         <template #default>
           <div class="msg-line">
+            <span class="msg-text">{{ message }}</span>
             <el-button size="small" text @click="copyMessage">复制</el-button>
           </div>
         </template>
       </el-alert>
 
       <!-- 2. 文件列表 -->
-      <div v-if="cabinetItems.length" class="result">
-        <div class="file" v-for="item in cabinetItems" :key="item.id">
-          <span class="file-item">
-            <el-icon><Document /></el-icon>
+      <div v-if="cabinetItems.length" class="result file-panel">
+        <div v-for="item in cabinetItems" :key="item.id" class="file-card">
+          <div class="file-info">
+            <el-icon size="16"><Document /></el-icon>
             <span class="name">{{ item.name }}</span>
-          </span>
-          <span class="file-item">
-            <!-- <span class="size">({{ formatSize(f.size) }})</span> -->
-            <el-button type="primary" link size="small" @click="download(item)"> 下载 </el-button>
-          </span>
+            <span class="size">({{ formatSize(item.size) }})</span>
+          </div>
+          <el-button type="primary" link @click="download(item)">下载</el-button>
         </div>
       </div>
 
@@ -154,6 +153,13 @@ function toHome() {
   ElMessage.success('已返回首页');
   router.push('/');
 }
+
+function formatSize(size) {
+  if (size < 1024) return `${size}B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)}KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(2)}MB`;
+  return `${(size / 1024 / 1024 / 1024).toFixed(2)}GB`;
+}
 </script>
 
 <style scoped>
@@ -192,5 +198,53 @@ function toHome() {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* 消息一行两端对齐 */
+.msg-alert :deep(.el-alert__content) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.msg-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.msg-text {
+  word-break: break-all;
+  flex: 1;
+  margin-right: 8px;
+}
+
+/* 文件卡片 */
+.file-panel {
+  margin-top: 12px;
+}
+.file-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.file-card:hover {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-info .name {
+  font-weight: 500;
+}
+.file-info .size {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

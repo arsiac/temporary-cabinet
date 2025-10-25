@@ -152,7 +152,7 @@ pub(crate) async fn save(
                     cabinet_code,
                     CabinetItemCategory::Text,
                     String::from("message.txt"),
-                    Some(bytes),
+                    bytes,
                     order as i32,
                 );
                 log::debug!(
@@ -182,7 +182,7 @@ pub(crate) async fn save(
                     cabinet_code,
                     CabinetItemCategory::File,
                     filename,
-                    Some(bytes.to_vec()),
+                    bytes.to_vec(),
                     order as i32,
                 );
                 log::debug!(
@@ -265,7 +265,7 @@ pub(crate) async fn items(
     State(state): State<ServerState>,
     Path(cabinet_code): Path<i64>,
     Json(credential): Json<CabinetCredential>,
-) -> Result<Json<Vec<CabinetItem>>, DomainError> {
+) -> Result<Json<Vec<CabinetItemView>>, DomainError> {
     let _ = validate_cabinet_permission(&state, cabinet_code, credential).await?;
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
@@ -275,7 +275,12 @@ pub(crate) async fn items(
     let items = cabinet_service
         .list_items_by_cabinet_code(cabinet_code)
         .await?;
-    Ok(Json(items))
+    Ok(Json(
+        items
+            .into_iter()
+            .map(CabinetItemView::from)
+            .collect::<Vec<_>>(),
+    ))
 }
 
 /// Get cabinet item content
@@ -383,6 +388,29 @@ impl From<Cabinet> for CabinetView {
             status: value.status,
             hold_token: value.hold_token,
             expire_at: value.expire_at,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CabinetItemView {
+    pub id: i64,
+    pub cabinet_code: i64,
+    pub category: CabinetItemCategory,
+    pub name: String,
+    pub size: i64,
+    pub sort_order: i32,
+}
+
+impl From<CabinetItem> for CabinetItemView {
+    fn from(value: CabinetItem) -> Self {
+        Self {
+            id: value.id,
+            cabinet_code: value.cabinet_code,
+            category: value.category,
+            name: value.name,
+            size: value.size,
+            sort_order: value.sort_order,
         }
     }
 }
