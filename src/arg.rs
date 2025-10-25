@@ -12,7 +12,7 @@ pub(crate) fn parse() -> Args {
 #[derive(clap::Parser, Debug)]
 #[command(
     version = "0.1.0",
-    about = "A simple web service for temporarily storing text or files.",
+    about = "A simple web service for temporarily storing text and files.",
     long_about = None
 )]
 pub(crate) struct Args {

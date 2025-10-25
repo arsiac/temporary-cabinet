@@ -1,5 +1,6 @@
 [package]
 name = "temporary-cabinet"
+description = "A simple web service for temporarily storing text and files"
 version.workspace = true
 edition.workspace = true
 
