@@ -1,11 +1,11 @@
 <template>
   <div class="panel">
-    <!-- 屏0 -->
+    <!-- Home -->
     <template v-if="step === 0">
-      <div class="title">30 秒临时存包柜</div>
+      <div class="title">{{ t('temporary-cabinet') }}</div>
       <div class="chip" :class="{ danger: stats.free === 0 }">
         <el-icon v-if="stats.free === 0"><Warning /></el-icon>
-        剩余柜子 <b>{{ stats.free }}/{{ stats.total }}</b>
+        {{ t('cabinets-remain') }} <b>{{ stats.free }}/{{ stats.total }}</b>
       </div>
       <el-button
         type="success"
@@ -14,44 +14,40 @@
         :disabled="stats.free === 0"
         @click="apply"
       >
-        申请柜子
+        {{ t('apply-cabinet') }}
       </el-button>
-      <p v-if="stats.free === 0" class="tips">柜子已用完，请等待他人取出后再试</p>
-      <el-button link @click="$router.push('/pick')" class="link">我要取件 →</el-button>
+      <p v-if="stats.free === 0" class="tips">{{ t('no-avaliable-cabinet-tips') }}</p>
+      <el-button link @click="$router.push('/pick')" class="link"
+        >{{ t('pickup-items') }} →</el-button
+      >
     </template>
 
-    <!-- 屏1 存入内容 -->
+    <!-- Step 1: Store -->
     <template v-if="step === 1">
       <div class="cabinet-bar">
         <span class="title"
-          >柜子 <span class="code">{{ cabinet.code }}</span></span
+          >{{ t('cabinet') }} <span class="code">{{ cabinet.code }}</span></span
         >
       </div>
-
       <div class="step-dot">1 / 4</div>
-
-      <div class="label">存一些消息</div>
-
+      <div class="label">{{ t('label:store-some-message') }}</div>
       <el-input
         v-model="text"
         type="textarea"
         :rows="4"
-        placeholder="贴一段文字…"
+        :placeholder="t('tips:input-some-text')"
         class="txt"
         maxlength="500"
         show-word-limit
       />
-      <div class="label">也可以放一些文件</div>
-
-      <!-- 多文件上传 -->
+      <div class="label">{{ t('label:store-some-files') }}</div>
       <el-upload drag multiple :auto-upload="false" :on-change="onUploadChange">
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">拖拽或点击上传文件</div>
+        <div class="el-upload__text">{{ t('upload-file-placeholder') }}</div>
         <template #tip>
-          <div class="el-upload__tip">单位文件大小不超过 2MB, 文件总大小不超过 10MB</div>
+          <div class="el-upload__tip">{{ t('upload-file-tips') }}</div>
         </template>
       </el-upload>
-
       <el-button
         type="success"
         size="large"
@@ -59,25 +55,25 @@
         :disabled="!text && files.length === 0"
         @click="toLock"
       >
-        下一步
+        {{ t('next-step') }}
       </el-button>
-      <el-button link @click="step = 0">← 返回</el-button>
+      <el-button link @click="step = 0">← {{ t('last-step') }}</el-button>
     </template>
 
-    <!-- 屏2 锁柜 -->
+    <!-- Step 2: Lock -->
     <template v-if="step === 2">
       <div class="step-dot">2 / 4</div>
-      <div class="title">锁柜</div>
-      <password-input v-model="pwd" placeholder="输入 4-20 位密码" class="inp" />
+      <div class="title">{{ t('lock-cabinet') }}</div>
+      <password-input v-model="pwd" :placeholder="t('tips:input-password')" class="inp" />
       <el-input
         v-model.number="hours"
         type="number"
         :min="1"
         :max="168"
-        placeholder="保存小时数"
+        :placeholder="t('tips:keep-hours')"
         class="inp"
       >
-        <template #append>小时</template>
+        <template #append>{{ t('hours') }}</template>
       </el-input>
       <el-button
         type="success"
@@ -86,7 +82,7 @@
         :disabled="!pwd || pwd.length < 4 || !hours"
         @click="lockCabinet"
       >
-        锁柜并取走编号
+        {{ t('button:lock-cabinet') }}
       </el-button>
       <el-button
         link
@@ -96,24 +92,26 @@
             step = 1;
           }
         "
-        >← 返回</el-button
+        >← {{ t('last-step') }}</el-button
       >
     </template>
 
-    <!-- 屏3 完成 -->
+    <!-- Step 3: Finish -->
     <template v-if="step === 3">
       <div class="step-dot green">3 / 4</div>
-      <el-result icon="success" title="柜子已锁好">
+      <el-result icon="success" :title="t('cabinet-locked')">
         <template #sub-title>
           <div style="text-align: left">
-            <p>柜子编号：{{ cabinet.code }}</p>
-            <p>取件密码：●●●●</p>
-            <p>到期时间：{{ dayjs(cabinet.expire_at).format('YYYY-MM-DD HH:mm:ss') }}</p>
+            <p>{{ t('cabinet-code') }}: {{ cabinet.code }}</p>
+            <p>{{ t('password') }}: ●●●●●●</p>
+            <p>
+              {{ t('expire-time') }}: {{ dayjs(cabinet.expire_at).format('YYYY-MM-DD HH:mm:ss') }}
+            </p>
           </div>
         </template>
         <template #extra>
-          <el-button type="success" @click="share">复制共享地址</el-button>
-          <el-button @click="reset">再存一个</el-button>
+          <el-button type="success" @click="share">{{ t('copy-pickup-link') }}</el-button>
+          <el-button @click="reset">{{ t('apply-another-cabinet') }}</el-button>
         </template>
       </el-result>
     </template>
@@ -123,11 +121,15 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { Warning, UploadFilled } from '@element-plus/icons-vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { getCabinetsUsage, applyCabinet, saveCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
 import { inject } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 const dayjs = inject('dayjs');
 const step = ref(0);
 const stats = ref({ total: 0, used: 0, free: 0 });
@@ -152,7 +154,7 @@ async function apply() {
     cabinet.value = c;
     step.value = 1;
   } catch (e) {
-    ElMessage.error(e || '申请失败，暂无空柜');
+    ElMessage.error(e || t('error:cabinet:apply-failed'));
   }
 }
 
@@ -171,7 +173,9 @@ function toLock() {
 function checkFileSize(uploadFile) {
   if (uploadFile.size > 2 * 1024 * 1024) {
     const fileSize = uploadFile.size / 1024 / 1024;
-    ElMessage.error(`文件 '${uploadFile.name}' 大小超过 2MB (${fileSize.toFixed(2)}MB)`);
+    ElMessage.error(
+      t('error:cabinet:file-exceeds', { filename: uploadFile.name, size: fileSize.toFixed(2) })
+    );
     return false;
   }
   return true;
@@ -181,15 +185,16 @@ function checkFilesSize(uploadFiles) {
   let totalSize = uploadFiles.reduce((acc, f) => acc + f.size, 0);
   if (totalSize > 10 * 1024 * 1024) {
     const totalFileSize = totalSize / 1024 / 1024;
-    ElMessage.error(`文件总大小超过 10MB (${totalFileSize.toFixed(2)}MB)`);
+    ElMessage.error(t('error:cabinet:total-file-exceeds', { size: totalFileSize.toFixed(2) }));
     return false;
   }
   return true;
 }
 
 function onUploadChange(uploadFile, uploadFiles) {
-  checkFileSize(uploadFile);
-  checkFilesSize(uploadFiles);
+  if (checkFileSize(uploadFile)) {
+    checkFilesSize(uploadFiles);
+  }
   files.value = uploadFiles;
 }
 
@@ -207,15 +212,23 @@ async function lockCabinet() {
     cabinet.value = await saveCabinet(cabinet.value.code, form);
     step.value = 3;
   } catch (e) {
-    ElMessage.error(e || '锁柜失败，请重试');
+    ElMessage.error(e || t('error:cabinet:lock-failed'));
   }
 }
 
 function share() {
   const url = `${location.origin}/pick?c=${cabinet.value.code}`;
-  const text = `柜子编号 ${cabinet.value.code}，链接 ${url}`;
-  navigator.clipboard.writeText(text);
-  ElMessage.success('已复制');
+  const text = t('cabinet:link-info', { code: cabinet.value.code, link: url });
+  if (navigator.clipboard) {
+    try {
+      navigator.clipboard.writeText(text);
+      ElMessage.success(t('copied'));
+    } catch (e) {
+      ElMessage.error(t('error:pickup-failed') + ' ' + e.message);
+    }
+  } else {
+    ElMessage.error(t('browser-not-support-copy'));
+  }
 }
 
 function reset() {

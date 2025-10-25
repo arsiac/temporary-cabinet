@@ -21,7 +21,6 @@ const emit = defineEmits(['update:modelValue']);
 </script>
 
 <style scoped>
-/* 假密码掩码：星号/disc 圆点 */
 .fake-pwd :deep(input) {
   -webkit-text-security: disc;
   -moz-text-security: disc;

@@ -1,9 +1,18 @@
 <template>
   <div class="panel">
-    <div class="title">取件</div>
+    <div class="title">{{ t('pickup') }}</div>
     <template v-if="step === 1">
-      <el-input v-model="code" placeholder="输入柜子号码" class="inp" />
-      <password-input v-model="password" placeholder="输入取件密码" class="inp" />
+      <el-input
+        v-model="code"
+        type="number"
+        :placeholder="t('tips:input-cabinet-code')"
+        class="inp"
+      />
+      <password-input
+        v-model="password"
+        :placeholder="t('tips:input-pickup-password')"
+        class="inp"
+      />
       <el-button
         type="success"
         size="large"
@@ -11,21 +20,18 @@
         :disabled="!code || !password"
         @click="openCabinet"
       >
-        打开
+        {{ t('open') }}
       </el-button>
     </template>
     <template v-if="step === 2">
-      <!-- 1. 文本消息 -->
       <el-alert v-if="message" type="info" :closable="false" class="result msg-alert">
         <template #default>
           <div class="msg-line">
             <span class="msg-text">{{ message }}</span>
-            <el-button size="small" text @click="copyMessage">复制</el-button>
+            <el-button size="small" text @click="copyMessage">{{ t('copy') }}</el-button>
           </div>
         </template>
       </el-alert>
-
-      <!-- 2. 文件列表 -->
       <div v-if="cabinetItems.length" class="result file-panel">
         <div v-for="item in cabinetItems" :key="item.id" class="file-card">
           <div class="file-info">
@@ -33,21 +39,21 @@
             <span class="name">{{ item.name }}</span>
             <span class="size">({{ formatSize(item.size) }})</span>
           </div>
-          <el-button type="primary" link @click="download(item)">下载</el-button>
+          <el-button type="primary" link @click="download(item)">{{ t('download') }}</el-button>
         </div>
       </div>
-
-      <!-- 3. 销毁 -->
       <div class="result">
-        <el-button type="danger" class="big-btn" @click="clearCabinet"> 清空并回收柜子 </el-button>
+        <el-button type="danger" class="big-btn" @click="clearCabinet">
+          {{ t('cleanup-and-delete-cabinet') }}
+        </el-button>
       </div>
     </template>
-    <el-button link @click="toHome">← 返回首页</el-button>
+    <el-button link @click="toHome">← {{ t('back-to-home') }}</el-button>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Document } from '@element-plus/icons-vue';
@@ -55,7 +61,9 @@ import PasswordInput from '@/components/PasswordInput.vue';
 import { getCabinetItems, getCabinetItemContent, deleteCabinet } from '@/api/cabinet';
 import { getPublicKey } from '@/api/crypto';
 import { sm2Encrypt } from '@/utils/crypto';
+import { useI18n } from 'vue-i18n';
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const step = ref(1);
@@ -63,10 +71,6 @@ const code = ref(route.query.c || '');
 const password = ref('');
 const cabinetItems = ref([]);
 const message = ref('');
-
-onMounted(() => {
-  if (code.value) ElMessage.info('已填入编号，请输入密码');
-});
 
 async function openCabinet() {
   let pk = await getPublicKey();
@@ -94,13 +98,21 @@ async function openCabinet() {
     cabinetItems.value = items.filter((item) => item.category === 'File');
     step.value = 2;
   } catch (e) {
-    ElMessage.error(e || '取件失败');
+    ElMessage.error(e || t('error:pickup-failed'));
   }
 }
 
 function copyMessage() {
-  navigator.clipboard.writeText(message.value);
-  ElMessage.success('已复制');
+  if (navigator.clipboard) {
+    try {
+      navigator.clipboard.writeText(message.value);
+      ElMessage.success(t('copied'));
+    } catch (e) {
+      ElMessage.error(t('error:pickup-failed') + ' ' + e.message);
+    }
+  } else {
+    ElMessage.error(t('browser-not-support-copy'));
+  }
 }
 
 async function download(item) {
@@ -141,16 +153,15 @@ async function clearCabinet() {
   try {
     await deleteCabinet(code.value, credential);
     reset();
-    ElMessage.success('柜子已回收');
+    ElMessage.success(t('cabinet-reclaimed'));
     router.push('/');
   } catch (e) {
-    ElMessage.error(e || '回收失败');
+    ElMessage.error(e || t('error:delete-cabinet-failed'));
   }
 }
 
 function toHome() {
   reset();
-  ElMessage.success('已返回首页');
   router.push('/');
 }
 
