@@ -48,14 +48,9 @@
         </div>
       </div>
       <div class="result">
-        <el-button-group class="big-btn">
-          <el-button type="primary" @click="copyMessage" text bg>
-            {{ t('copy') }}
-          </el-button>
-          <el-button type="danger" @click="clearCabinet">
-            {{ t('cleanup-and-delete-cabinet') }}
-          </el-button>
-        </el-button-group>
+        <el-button class="big-btn" type="danger" @click="clearCabinet">
+          {{ t('cleanup-and-delete-cabinet') }}
+        </el-button>
       </div>
     </template>
     <el-button link @click="toHome">← {{ t('back-to-home') }}</el-button>
