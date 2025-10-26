@@ -3,6 +3,27 @@ name = "temporary-cabinet"
 description = "A simple web service for temporarily storing text and files"
 version.workspace = true
 edition.workspace = true
+license = "MIT"
+
+[package.metadata.deb]
+maintainer = "Arsiac arsiachou@foxmail.com"
+copyright = "2025, Arsiac"
+section = "net"
+priority = "optional"
+depends = "adduser, systemd"
+maintainer-scripts = "package/debian"
+assets = [
+    [
+        "target/release/temporary-cabinet",
+        "/usr/bin/temporary-cabinet",
+        "755",
+    ],
+    [
+        "package/temporary-cabinet.service",
+        "/lib/systemd/system/temporary-cabinet.service",
+        "644",
+    ],
+]
 
 [dependencies]
 web.workspace = true

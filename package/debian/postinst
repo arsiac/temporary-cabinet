@@ -1,0 +1,42 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # 1. Create user (no shell)
+        if ! getent passwd temporary-cabinet >/dev/null; then
+            adduser --system --group --home /var/lib/temporary-cabinet \
+                    --shell /bin/false --quiet temporary-cabinet
+        fi
+
+        # 2. Create log folder
+        mkdir -p /var/log/temporary-cabinet
+        chown temporary-cabinet:temporary-cabinet /var/log/temporary-cabinet
+        chmod 755 /var/log/temporary-cabinet
+
+        # 3. Create data folder
+        mkdir -p /var/lib/temporary-cabinet
+        chown temporary-cabinet:temporary-cabinet /var/lib/temporary-cabinet
+        chmod 750 /var/lib/temporary-cabinet
+
+        # 4. Load systemd unit
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            if [ -z "$2" ]; then
+                systemctl enable temporary-cabinet.service
+                systemctl start  temporary-cabinet.service
+            else
+                systemctl try-restart temporary-cabinet.service
+            fi
+        fi
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # Remove user and group
+        if getent passwd temporary-cabinet >/dev/null; then
+            deluser --system temporary-cabinet || true
+        fi
+        if getent group temporary-cabinet >/dev/null; then
+            delgroup --system temporary-cabinet || true
+        fi
+        # Remove data and log folder
+        rm -rf /var/lib/temporary-cabinet /var/log/temporary-cabinet
+        ;;
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,0 +1,22 @@
+[Unit]
+Description=Temporary Cabinet Server
+After=network.target
+
+[Service]
+Type=simple
+User=temporary-cabinet
+Group=temporary-cabinet
+ExecStart=/usr/bin/temporary-cabinet --data-dir=/var/lib/temporary-cabinet
+WorkingDirectory=/var/lib/temporary-cabinet
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/temporary-cabinet/output.log
+StandardError=append:/var/log/temporary-cabinet/error.log
+MemoryMax=256M
+CPUQuota=50%
+LimitNOFILE=1024
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
