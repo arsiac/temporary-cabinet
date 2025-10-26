@@ -38,18 +38,6 @@ impl Repository for CabinetRepository {
         Ok(())
     }
 
-    async fn delete_expired(&self, time: DateTime<Local>) -> Result<u64, DomainError> {
-        let res = Entity::delete_many()
-            .filter(Column::ExpireAt.lte(time.naive_local()))
-            .exec(&self.connection)
-            .await
-            .map_err(|e| {
-                log::error!("Failed to delete expired cabinets: {e}");
-                DomainError::InternalError
-            })?;
-        Ok(res.rows_affected)
-    }
-
     async fn update_by_code(&self, cabinet: Cabinet) -> Result<(), DomainError> {
         use sea_orm::ActiveValue;
         let model = Model::from(cabinet);
@@ -110,6 +98,20 @@ impl Repository for CabinetRepository {
             })?
             .map(Cabinet::try_from)
             .transpose()
+    }
+
+    async fn list_expired(&self, time: DateTime<Local>) -> Result<Vec<Cabinet>, DomainError> {
+        Entity::find()
+            .filter(Column::ExpireAt.lt(time.naive_local()))
+            .all(&self.connection)
+            .await
+            .map_err(|e| {
+                log::error!("Failed to list expired cabinet: {e}");
+                DomainError::InternalError
+            })?
+            .into_iter()
+            .map(Cabinet::try_from)
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 

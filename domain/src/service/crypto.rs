@@ -1,3 +1,5 @@
+use chrono::Local;
+
 use crate::entity::crypto::CryptoKeypair;
 use crate::error::DomainError;
 use crate::error::crypto::CryptoError;
@@ -5,12 +7,14 @@ use crate::repository::crypto::CryptoKeypairRepository;
 
 pub struct Sm2CryptoService<R: CryptoKeypairRepository> {
     crypto_keypair_repository: R,
+    max_keypair_number: u64,
 }
 
 impl<R: CryptoKeypairRepository> Sm2CryptoService<R> {
-    pub fn new(crypto_keypair_repository: R) -> Self {
+    pub fn new(crypto_keypair_repository: R, max_keypair_number: u64) -> Self {
         Sm2CryptoService {
             crypto_keypair_repository,
+            max_keypair_number,
         }
     }
 }
@@ -20,6 +24,15 @@ impl<R: CryptoKeypairRepository> Sm2CryptoService<R> {
     pub async fn generate_keypair(&self) -> Result<CryptoKeypair, DomainError> {
         use chrono::{Duration, Local};
 
+        let count = self.crypto_keypair_repository.count().await?;
+        if count >= self.max_keypair_number {
+            log::warn!(
+                "Maximum number({}) of keypairs reached.",
+                self.max_keypair_number
+            );
+            return Err(CryptoError::MaxKeypairCountReached)?;
+        }
+
         let (pk, sk) = gm_sm2::key::gen_keypair().map_err(|e| {
             log::error!("Generate SM2 keypair failed: {e}");
             CryptoError::KeypairGenerationFailed
@@ -27,7 +40,7 @@ impl<R: CryptoKeypairRepository> Sm2CryptoService<R> {
         let keypair = CryptoKeypair::new(
             sk2hex(&sk),
             pk2hex(&pk),
-            Local::now() + Duration::minutes(10),
+            Local::now() + Duration::minutes(5),
         );
         log::debug!(
             "Generated new SM2 keypair with public key '{}'",
@@ -40,6 +53,14 @@ impl<R: CryptoKeypairRepository> Sm2CryptoService<R> {
     pub async fn delete_by_id(&self, id: uuid::Uuid) -> Result<(), DomainError> {
         log::debug!("Deleting keypair with id '{id}'");
         self.crypto_keypair_repository.delete_by_id(id).await
+    }
+
+    /// Delete expired keypairs
+    pub async fn delete_expired(&self) -> Result<u64, DomainError> {
+        log::debug!("Deleting expired keypairs");
+        self.crypto_keypair_repository
+            .delete_expired(Local::now())
+            .await
     }
 
     /// Get a keypair by its public key.

@@ -9,6 +9,7 @@ pub enum CryptoError {
     InvalidHexString,
     KeypairExpired,
     NotFound,
+    MaxKeypairCountReached,
 }
 
 impl crate::error::I18nError for CryptoError {
@@ -38,6 +39,12 @@ impl crate::error::I18nError for CryptoError {
             }
             CryptoError::NotFound => {
                 rust_i18n::t!("error.crypto.not_found", locale = locale_text)
+            }
+            CryptoError::MaxKeypairCountReached => {
+                rust_i18n::t!(
+                    "error.crypto.max_keypair_count_reached",
+                    locale = locale_text
+                )
             }
         }
     }

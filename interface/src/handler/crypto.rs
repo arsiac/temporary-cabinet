@@ -15,7 +15,10 @@ pub(crate) async fn public_key(
     State(state): State<ServerState>,
     AcceptLanguage(language): AcceptLanguage,
 ) -> Result<String, InterfaceError> {
-    let service = infrastructure::service::crypto::create_sm2_crypto_service(state.connection);
+    let service = infrastructure::service::crypto::create_sm2_crypto_service(
+        state.connection,
+        state.max_keypair_number,
+    );
     let keypair = service
         .generate_keypair()
         .await

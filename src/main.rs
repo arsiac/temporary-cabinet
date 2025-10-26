@@ -7,6 +7,7 @@ mod init;
 /// - Start the server and listen for the ports in the configuration
 #[tokio::main]
 async fn main() {
+    use tokio_util::sync::CancellationToken;
     let args = arg::parse();
     init::initialize_logger(args.debug);
     let data_folder = init::initialize_data_folder(args.data_dir);
@@ -18,8 +19,13 @@ async fn main() {
         log::error!("Failed to bind to {}: {}", &serv_addr, e);
         return;
     }
+    let cancel_token = CancellationToken::new();
+    init::initialize_tickers(&state, &cancel_token);
     log::info!("Serving on {}", &serv_addr);
-    axum::serve(listener.unwrap(), router(state)).await.unwrap();
+    axum::serve(listener.unwrap(), router(state))
+        .with_graceful_shutdown(shutdown_signal(cancel_token))
+        .await
+        .unwrap();
 }
 
 /// Merge front-end and back-end routes and configure middleware
@@ -41,4 +47,12 @@ fn router(state: interface::ServerState) -> axum::Router {
                 .layer(CompressionLayer::new()),
         )
         .layer(DefaultBodyLimit::max(20 * 1024 * 1024))
+}
+
+async fn shutdown_signal(cancel_token: tokio_util::sync::CancellationToken) {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to install CTRL+C signal handler");
+    log::info!("Shutting down...");
+    cancel_token.cancel();
 }

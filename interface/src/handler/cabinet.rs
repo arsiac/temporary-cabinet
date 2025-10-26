@@ -34,8 +34,11 @@ pub(crate) async fn apply(
     State(state): State<ServerState>,
     AcceptLanguage(language): AcceptLanguage,
 ) -> Result<Json<CabinetView>, InterfaceError> {
-    let service =
-        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let service = create_cabinet_service(
+        state.connection,
+        &state.data_folder,
+        state.max_cabinet_number,
+    );
     let cabinet = service
         .apply()
         .await
@@ -49,8 +52,11 @@ pub(crate) async fn usage(
     State(state): State<ServerState>,
     AcceptLanguage(language): AcceptLanguage,
 ) -> Result<Json<CabinetUsage>, InterfaceError> {
-    let service =
-        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let service = create_cabinet_service(
+        state.connection,
+        &state.data_folder,
+        state.max_cabinet_number,
+    );
     let status = service
         .usage()
         .await
@@ -65,8 +71,11 @@ pub(crate) async fn get_by_code(
     AcceptLanguage(language): AcceptLanguage,
     Path(cabinet_code): Path<i64>,
 ) -> Result<Json<CabinetView>, InterfaceError> {
-    let service =
-        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let service = create_cabinet_service(
+        state.connection,
+        &state.data_folder,
+        state.max_cabinet_number,
+    );
     let cabinet = service
         .get_nonnone_by_code(cabinet_code)
         .await
@@ -253,7 +262,8 @@ pub(crate) async fn save(
         .await
         .map_err(|e| InterfaceError::new(language, e))?;
     let public_key = public_key.unwrap();
-    let crypto_service = create_sm2_crypto_service(state.connection.clone());
+    let crypto_service =
+        create_sm2_crypto_service(state.connection.clone(), state.max_keypair_number);
     let keypair = crypto_service
         .get_effective_by_public_key(&public_key)
         .await
@@ -271,8 +281,11 @@ pub(crate) async fn save(
         .await
         .map_err(|e| InterfaceError::new(language, e))?;
 
-    let cabinet_service =
-        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let cabinet_service = create_cabinet_service(
+        state.connection,
+        &state.data_folder,
+        state.max_cabinet_number,
+    );
     let cabinet = cabinet_service
         .save(cabinet, items)
         .await
@@ -301,7 +314,7 @@ pub(crate) async fn delete_cabinet(
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
-        state.cabinet_number,
+        state.max_cabinet_number,
     );
 
     cabinet_service
@@ -329,7 +342,7 @@ pub(crate) async fn items(
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
-        state.cabinet_number,
+        state.max_cabinet_number,
     );
     let items = cabinet_service
         .list_items_by_cabinet_code(cabinet_code)
@@ -358,8 +371,11 @@ pub(crate) async fn get_item_content(
     let _ = validate_cabinet_permission(&state, cabinet_code, credential)
         .await
         .map_err(|e| InterfaceError::new(language, e))?;
-    let cabinet_service =
-        create_cabinet_service(state.connection, &state.data_folder, state.cabinet_number);
+    let cabinet_service = create_cabinet_service(
+        state.connection,
+        &state.data_folder,
+        state.max_cabinet_number,
+    );
     // Get item
     let item = cabinet_service
         .get_item_by_id(item_id, true)
@@ -417,7 +433,7 @@ async fn validate_cabinet_permission(
     let cabinet_service = create_cabinet_service(
         state.connection.clone(),
         &state.data_folder,
-        state.cabinet_number,
+        state.max_cabinet_number,
     );
     let cabinet = cabinet_service.get_by_code(cabinet_code).await?;
     if cabinet.is_none() {
@@ -426,7 +442,8 @@ async fn validate_cabinet_permission(
     let cabinet = cabinet.unwrap();
 
     // Decrypt password
-    let crypto_service = create_sm2_crypto_service(state.connection.clone());
+    let crypto_service =
+        create_sm2_crypto_service(state.connection.clone(), state.max_keypair_number);
     let keypair = crypto_service
         .get_effective_by_public_key(&credential.public_key)
         .await?;

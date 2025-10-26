@@ -9,6 +9,7 @@
     "error.crypto.invalid_hex_string": "无效的十六进制字符串",
     "error.crypto.keypair_expired": "密钥对已过期",
     "error.crypto.not_found": "密钥对不存在",
+    "error.crypto.max_keypair_count_reached": "已达到最大密钥对数量",
     "error.cabinet.status_not_support": "不支持状态 ${status}",
     "error.cabinet.no_available_cabinet": "没有可用的柜子",
     "error.cabinet.invalid_item_category": "无效的类别 ${category}",

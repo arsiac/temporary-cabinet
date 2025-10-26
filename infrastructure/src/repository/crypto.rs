@@ -50,6 +50,13 @@ impl Repository for CryptoKeypairRepository {
         Ok(result.rows_affected)
     }
 
+    async fn count(&self) -> Result<u64, DomainError> {
+        Entity::find().count(&self.connection).await.map_err(|e| {
+            log::error!("Failed to count keypairs: {e}");
+            DomainError::InternalError
+        })
+    }
+
     async fn find_by_public_key(
         &self,
         public_key: &str,

@@ -9,6 +9,7 @@
     "error.crypto.invalid_hex_string": "Invalid hexadecimal string",
     "error.crypto.keypair_expired": "Key pair has expired",
     "error.crypto.not_found": "Key pair does not exist",
+    "error.crypto.max_keypair_count_reached": "Maximum key pairs reached",
     "error.cabinet.status_not_support": "Status ${status} not supported",
     "error.cabinet.no_available_cabinet": "No available cabinet",
     "error.cabinet.invalid_item_category": "Invalid category: ${category}",

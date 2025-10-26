@@ -10,9 +10,6 @@ pub trait CabinetRepository {
     /// Delete a cabinet by code
     async fn delete_by_code(&self, code: i64) -> Result<(), DomainError>;
 
-    /// Delete expired cabinets
-    async fn delete_expired(&self, time: DateTime<Local>) -> Result<u64, DomainError>;
-
     /// Update a cabinet by code
     async fn update_by_code(&self, cabinet: Cabinet) -> Result<(), DomainError>;
 
@@ -27,4 +24,7 @@ pub trait CabinetRepository {
 
     /// Find cabinet by code
     async fn find_by_code(&self, code: i64) -> Result<Option<Cabinet>, DomainError>;
+
+    /// List expired cabinets
+    async fn list_expired(&self, time: DateTime<Local>) -> Result<Vec<Cabinet>, DomainError>;
 }

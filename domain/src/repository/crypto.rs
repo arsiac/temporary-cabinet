@@ -14,6 +14,9 @@ pub trait CryptoKeypairRepository {
     /// Delete expired keypairs.
     async fn delete_expired(&self, time: DateTime<Local>) -> Result<u64, DomainError>;
 
+    /// Count all keypairs.
+    async fn count(&self) -> Result<u64, DomainError>;
+
     /// Find a keypair by public key.
     async fn find_by_public_key(
         &self,

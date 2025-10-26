@@ -35,9 +35,6 @@ where
 {
     /// Apply for a cabinet
     pub async fn apply(&self) -> Result<Cabinet, DomainError> {
-        let now = Local::now();
-        let deleted_count = self.cabinet_repository.delete_expired(now).await?;
-        log::info!("Deleted {deleted_count} expired cabinets");
         let used = self
             .cabinet_repository
             .count_by_status(CabinetStatus::Occupied)
@@ -150,6 +147,16 @@ where
             self.cabinet_item_repository.delete_by_id(item.id).await?;
         }
         Ok(())
+    }
+
+    /// Delete expired cabinets
+    pub async fn delete_expired(&self) -> Result<u64, DomainError> {
+        let cabinets = self.cabinet_repository.list_expired(Local::now()).await?;
+        let count = cabinets.len();
+        for cabinet in cabinets {
+            self.delete_by_code(cabinet.code).await?;
+        }
+        Ok(count as u64)
     }
 
     /// Get cabinet by code
