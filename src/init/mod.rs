@@ -1,4 +1,4 @@
-use migration::MigratorTrait;
+mod ticker;
 
 /// Initialize logger
 pub(crate) fn initialize_logger(debug: bool) {
@@ -54,7 +54,7 @@ pub(crate) fn initialize_data_folder(data_folder: Option<String>) -> std::path::
 pub(crate) async fn initialize_database(
     data_folder: &std::path::Path,
 ) -> sea_orm::DatabaseConnection {
-    use migration::Migrator;
+    use migration::{Migrator, MigratorTrait};
     use sea_orm::{ConnectOptions, Database};
 
     let database_file = data_folder.join("db.sqlite");
@@ -88,66 +88,6 @@ pub(crate) fn initialize_tickers(
     state: &interface::ServerState,
     cancel_token: &tokio_util::sync::CancellationToken,
 ) {
-    use infrastructure::service::cabinet::create_cabinet_service;
-    use infrastructure::service::crypto::create_sm2_crypto_service;
-    use tokio::time::Duration;
-
-    // Public key clean ticker
-    log::info!("Starting public key clean ticker...");
-    let mut public_key_clean_interval = tokio::time::interval(Duration::from_secs(5 * 60));
-    let crypto_service =
-        create_sm2_crypto_service(state.connection.clone(), state.max_keypair_number);
-    let public_key_cancel_token = cancel_token.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = public_key_clean_interval.tick() => {
-                    match crypto_service.delete_expired().await {
-                        Ok(count) => {
-                            log::info!("Deleted {} expired public keys", count);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to delete expired public keys: {e}");
-                        }
-                    }
-                },
-
-                _ = public_key_cancel_token.cancelled() => {
-                    log::info!("Stopping public key clean ticker...");
-                    break;
-                }
-            }
-        }
-    });
-
-    // Cabinet clean ticker
-    log::info!("Starting cabinet clean ticker...");
-    let mut cabinet_clean_interval = tokio::time::interval(Duration::from_secs(5 * 60));
-    let cabinet_service = create_cabinet_service(
-        state.connection.clone(),
-        &state.data_folder,
-        state.max_cabinet_number,
-    );
-    let cabinet_clean_cancel_token = cancel_token.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = cabinet_clean_interval.tick() => {
-                     match cabinet_service.delete_expired().await {
-                        Ok(count) => {
-                            log::info!("Deleted {} expired cabinets", count);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to delete expired cabinets: {e}")
-                        }
-                    }
-                },
-                _ = cabinet_clean_cancel_token.cancelled() => {
-                    log::info!("Stopping cabinet clean ticker...");
-                    break;
-                }
-
-            }
-        }
-    });
+    ticker::initialize_public_key_clean_ticker(state, cancel_token);
+    ticker::initialize_cabinet_clean_ticker(state, cancel_token);
 }
